@@ -10,15 +10,8 @@ public class SeedSorter {
      * @param seeds 种子队列
      * @return 排序后的种子队列
      */
-    public Queue<Seed> sortByCoverage(Queue<Seed> seeds) {
-        // 将 Queue 转换为 List
-        List<Seed> seedList = new ArrayList<>(seeds);
-
-        // 按照覆盖率降序排序
-        seedList.sort(Comparator.comparingLong(Seed::getCoverage).reversed());
-
-        // 将排序后的 List 转换回 Queue
-        return new LinkedList<>(seedList);
+    public void sortByCoverage(List<Seed> seeds) {
+        seeds.sort(Comparator.comparingLong(Seed::getCoverage).reversed());
     }
 
     /**
@@ -27,15 +20,8 @@ public class SeedSorter {
      * @param seeds 种子队列
      * @return 排序后的种子队列
      */
-    public Queue<Seed> sortByExecutionTime(Queue<Seed> seeds) {
-        // 将 Queue 转换为 List
-        List<Seed> seedList = new ArrayList<>(seeds);
-
-        // 按照执行时间升序排序
-        seedList.sort(Comparator.comparingLong(Seed::getExecuteTime));
-
-        // 将排序后的 List 转换回 Queue
-        return new LinkedList<>(seedList);
+    public void sortByExecutionTime(List<Seed> seeds) {
+        seeds.sort(Comparator.comparingLong(Seed::getExecuteTime));
     }
     /**
      * 按启发式评分对种子进行排序
@@ -44,13 +30,12 @@ public class SeedSorter {
      * @return 排序后的种子队列
      */
     //当前未使用
-    public List<Seed> sortByHeuristic(List<Seed> seeds) {
+    public void sortByHeuristic(List<Seed> seeds) {
         seeds.sort((s1, s2) -> {
             long score1 = computeHeuristicScore(s1);
             long score2 = computeHeuristicScore(s2);
             return Long.compare(score2, score1); // 从大到小排序
         });
-        return seeds;
     }
 
     private long computeHeuristicScore(Seed seed) {

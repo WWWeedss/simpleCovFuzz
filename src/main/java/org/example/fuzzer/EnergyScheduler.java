@@ -1,5 +1,6 @@
 package org.example.fuzzer;
 
+import java.util.List;
 import java.util.Queue;
 
 public class EnergyScheduler {
@@ -8,7 +9,7 @@ public class EnergyScheduler {
      * 根据种子的覆盖度增量调整能量
      * @param seedQueue 种子队列
      */
-    public static void energySchedule(Queue<Seed> seedQueue) {
+    public static void energySchedule(List<Seed> seedQueue) {
         for (Seed seed : seedQueue) {
             long incrementalCoverage = seed.getIncrementalCoverage();
 
@@ -35,8 +36,8 @@ public class EnergyScheduler {
         int incrementalCoverage = (int) seed.getIncrementalCoverage();
 
         if (incrementalCoverage > 0) {
-            // 假设每 10 单位的覆盖度增量增加 1 能量
-            energyIncrement = (int)(incrementalCoverage / 10);
+            // 假设每 5 单位的覆盖度增量增加 1 能量
+            energyIncrement = (int)(incrementalCoverage/2);
         } else {
             // 如果覆盖度增量为 0 或负数，能量不增加
             energyIncrement = 0;

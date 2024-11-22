@@ -9,10 +9,13 @@ public class Seed {
     private long executeTime = 0;
     private boolean isCrash = false;
     private long energy = 2;
-    private boolean isInitialSeed = true;
 
     public Seed(String seedPath) {
         this.seedPath = seedPath;
+    }
+
+    public String getSeedPath() {
+        return seedPath;
     }
 
     public File getFile() {
@@ -23,12 +26,8 @@ public class Seed {
         return coverage;
     }
 
-    // 更新当前覆盖度
     public void updateCoverage(long coverage) {
-        // 上次运行的覆盖度
-        long previousCoverage = this.coverage; // 保存上次覆盖度
-        this.coverage = coverage;               // 更新当前覆盖度
-        this.incrementalCoverage = this.coverage - previousCoverage; // 计算覆盖度增量
+        this.coverage = coverage;
     }
 
     public long getIncrementalCoverage() {
@@ -59,11 +58,7 @@ public class Seed {
         this.energy = energy;
     }
 
-    public boolean isInitialSeed() {
-        return isInitialSeed;
-    }
-
-    public void setInitialSeed(boolean isInitialSeed) {
-        this.isInitialSeed = isInitialSeed;
+    public void updateIncrementalCoverage(long incrementCoverage) {
+        this.incrementalCoverage = incrementCoverage;
     }
 }
