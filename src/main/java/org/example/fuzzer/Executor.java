@@ -6,13 +6,13 @@ import java.nio.file.*;
 
 public class Executor {
     private final String targetPath;
-    private String outputDirPath = "/output_dir"; // 输出目录
     private final Queue<Seed> seedQueue; // 种子队列
     private long executionCount = 0; // 执行次数
     private long totalExecutionTime = 0; // 总执行时间（纳秒）
     private long crashCount = 0; // 崩溃次数
     private final Set<String> coveragePaths = new HashSet<>(); // 记录所有覆盖路径
     private final SeedSorter seedSorter = new SeedSorter(); // 种子排序器
+    private Logger logger = new Logger(); // 日志记录器
 
     public Executor(String targetPath, String seedDirPath) {
         this.targetPath = targetPath;
@@ -23,7 +23,7 @@ public class Executor {
     public Executor(String targetPath, String seedDirPath, String outputDirPath) {
         this.targetPath = targetPath;
         this.seedQueue = new LinkedList<>();
-        this.outputDirPath = outputDirPath;
+        this.logger = new Logger(outputDirPath);
         initialSeedQueue(seedDirPath);
     }
 
@@ -44,38 +44,42 @@ public class Executor {
         while (!seedQueue.isEmpty()) {
             Queue<Seed> nexSeedQueue = new LinkedList<>();
 
-            //如果非初始队列，进行排序、能量调度、变异等操作
+            // 如果非初始队列，进行排序、能量调度、变异等操作
             if (!seedQueue.peek().isInitialSeed()) {
-
-                //排序种子队列
+                // 排序种子队列
                 seedSorter.sortByCoverage(seedQueue);
 
-                //能量调度
+                // 能量调度
+                EnergyScheduler.energySchedule(seedQueue);
 
-                //变异
+                // 变异
             }
+
             for (int i = 0; i < seedQueue.size(); i++) {
                 Seed seed = seedQueue.poll();
                 if (seed == null) continue;
+
                 // 执行种子并统计信息
                 try {
                     executeSeed(seed);
-
                 } catch (IOException | InterruptedException e) {
                     System.err.println("执行种子时发生错误: " + e.getMessage());
                     seed.setCrash(true); // 标记为崩溃种子
 
-                    //输出种子信息到输出目录crash，使用logger
+                    // 记录崩溃种子
+                    logger.logCrashSeed(seed);
 
                 } finally {
                     seed.setInitialSeed(false); // 标记为非初始种子
 
-                    //如果种子还有能量，加入下一轮种子队列
+                    // 如果种子还有能量，加入下一轮种子队列
                     seed.updateEnergy(seed.getEnergy() - 1);
                     if (seed.getEnergy() > 0) {
                         nexSeedQueue.add(seed);
                     }
-                    //输出种子信息到输出目录queue
+
+                    // 记录普通种子
+                    logger.logCommonSeed(seed);
                 }
             }
 
@@ -119,7 +123,7 @@ public class Executor {
 
         // 更新种子信息
         seed.updateExecutionTime((endTime - startTime) / 1_000_000); // 转换为毫秒
-        seed.updateCoverage(coveragePaths.size());
+        seed.updateCoverage(coveragePaths.size()); // 更新当前覆盖度，并计算增量
         seed.setCrash(exitCode != 0); // 非零退出码表示崩溃
 
         // 更新总体统计
@@ -127,6 +131,7 @@ public class Executor {
         if (!seed.isCrash()) {
             totalExecutionTime += seed.getExecuteTime();
         } else {
+            logger.logCrashSeed(seed);
             crashCount++;
         }
     }
@@ -148,5 +153,9 @@ public class Executor {
         Executor executor = new Executor(targetPath, seedDirPath);
         executor.execute();
         executor.printInfo();
+    }
+
+    public Logger getLogger() {
+        return logger;
     }
 }

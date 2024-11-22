@@ -4,10 +4,11 @@ import java.io.File;
 
 public class Seed {
     public String seedPath;
-    private long coverage = 0;
+    private long coverage = 0;               // 当前运行的覆盖度
+    private long incrementalCoverage = 0;     // 覆盖度增量（当前运行与上次运行的差值）
     private long executeTime = 0;
     private boolean isCrash = false;
-    private long energy = 1;
+    private long energy = 2;
     private boolean isInitialSeed = true;
 
     public Seed(String seedPath) {
@@ -22,8 +23,16 @@ public class Seed {
         return coverage;
     }
 
+    // 更新当前覆盖度
     public void updateCoverage(long coverage) {
-        this.coverage = coverage;
+        // 上次运行的覆盖度
+        long previousCoverage = this.coverage; // 保存上次覆盖度
+        this.coverage = coverage;               // 更新当前覆盖度
+        this.incrementalCoverage = this.coverage - previousCoverage; // 计算覆盖度增量
+    }
+
+    public long getIncrementalCoverage() {
+        return incrementalCoverage;  // 返回覆盖度增量
     }
 
     public long getExecuteTime() {
