@@ -70,11 +70,14 @@ sudo apt update
 sudo apt install zlib1g-dev
 ```
 
-还有docker、python3
+ubuntu 似乎自带python 
 
-##### start
+还有docker
 
-//todo
+### start
+
+运行java项目，在控制台输入待测数据目录  
+得到csv文件后运行analyze_courage.py生成覆盖图
 
 #### 输出目录
 

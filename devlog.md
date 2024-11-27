@@ -141,3 +141,19 @@ afl使用中有时会出现以下报错：
 sudo sh -c 'echo core > /proc/sys/kernel/core_pattern'
 ```
 
+***
+***  
+
+### 实现评估组件
+
+创建CoverageEvalutor类， 
+将覆盖率数据写入文件 
+将其集成到Executor中 
+修改Main类以使用新的Executor函数。 
+添加测速功能 
+
+### 绘制覆盖率曲线 
+
+创建一个新的 Python 脚本：coverage_evaluator.py。  
+导入`matplotlib.pyplot`：根据导出的csv文件绘图。  
+编写代码来收集、处理覆盖率数据并绘制覆盖率曲线。 
