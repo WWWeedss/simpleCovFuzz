@@ -79,6 +79,145 @@ ubuntu 似乎自带python
 运行java项目，在控制台输入待测数据目录  
 得到csv文件后运行analyze_courage.py生成覆盖图
 
+### 测试target
+
+原理是调用以下命令：
+
+```bash
+afl-showmap -o - -- …
+```
+
+…即运行可执行文件的命令，这种运行和在终端内直接运行差别不大，因此运行可执行文件的命令行参数是必要的，以下是可测试的target的输入
+
+至于input files则是询问需不需要将种子文件的内容读取并写入可执行文件的输入流。
+
+```bash
+#提示输入
+Please enter the target path:
+
+Please enter the seed directory path:
+
+Do you need to provide extra arguments for the target program? (y/n)
+
+Are the seeds input files? (y/n)
+```
+
+#### target1
+
+```bash
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/fuzz_targets/target1/cxxfilt
+
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/input/target1seed
+
+n
+
+y
+```
+
+#### target2
+
+```bash
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/fuzz_targets/target2/readelf
+
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/input/target2seed
+
+y
+
+-a #这是命令行参数，可选，详情请参考readelf的具体使用方式。下方使用到命令行参数的同此
+
+n
+```
+
+#### target3
+
+```bash
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/fuzz_targets/target3/nm-new
+
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/input/target3seed
+
+n
+
+n
+```
+
+#### target4
+
+```bash
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/fuzz_targets/target4/objdump
+
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/input/target4seed
+
+y
+
+-a
+
+n
+```
+
+#### target5
+
+```bash
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/fuzz_targets/target5/djpeg
+
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/input/target5seed
+
+y
+
+-verbose
+
+n
+```
+
+#### target6
+
+插桩没搞定，遂鸽了
+
+#### target7
+
+```bash
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/fuzz_targets/target7/xmllint
+
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/input/target7seed
+
+y
+
+--noout
+
+n
+```
+
+#### target8
+
+```bash
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/fuzz_targets/target8/lua
+
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/input/target8seed
+
+n
+
+n
+```
+
+#### target9
+
+插桩没搞定，虽然mjs能运行，但是afl-showmap没法做。
+
+#### target10
+
+```bash
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/fuzz_targets/target10/tcpdump
+
+/home/wwweeds/fuzzTestDir/simpleCovFuzz/src/main/java/org/example/input/target10seed
+
+y
+
+-r 
+
+n
+```
+
+### 
+
 #### 输出目录
 
 默认输出目录为src/main/java/org/example/output_dir
