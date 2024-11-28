@@ -167,6 +167,6 @@ public class Executor {
         System.out.println("Total Execution Time: " + totalExecutionTime + " ns");
         System.out.println("Crash Count: " + crashCount);
         System.out.println("Coverage Paths: " + coveragePaths.size());
-        System.out.println("Current Test Speed: " + speed + " executions per second");
+        System.out.println("Current Test Speed: " + String.format("%.2f", speed) + " executions per second");
     }
 }

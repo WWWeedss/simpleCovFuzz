@@ -1,7 +1,3 @@
-// 输入示例
-// String targetPath = "src/main/java/org/example/fuzz_targets/target1/cxxfilt";
-// String seedDirPath = "src/main/java/org/example/input/target1seed";
-
 package org.example;
 
 import org.example.fuzzer.Executor;
@@ -14,6 +10,9 @@ public class Main {
         String seedDirPath = null;
         String outputDirPath = "src/main/java/org/example/output_dir";
 
+        // 输入示例
+        // src/main/java/org/example/fuzz_targets/target1/cxxfilt
+        // src/main/java/org/example/input/target1seed
         try (Scanner scanner = new Scanner(System.in)) {
             System.out.println("Please enter the target path:");
             targetPath = scanner.nextLine();
