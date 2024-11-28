@@ -7,6 +7,8 @@ import java.util.concurrent.*;
 
 public class Executor {
     private final String targetPath;
+    private final String[] targetArgs; // 目标程序的命令行参数
+    private final Boolean isInputFile; // 是否是输入文件
     private final Queue<Seed> seedQueue; // 种子队列
     private long executionCount = 0; // 执行次数
     private long totalExecutionTime = 0; // 总执行时间（纳秒）
@@ -21,8 +23,10 @@ public class Executor {
     private final ScheduledExecutorService analysisScheduler = Executors.newScheduledThreadPool(1); // 数据分析定时器
     private long startTime; // 开始时间
 
-    public Executor(String targetPath, String seedDirPath, String outputDirPath) {
+    public Executor(String targetPath, String targetArgs[], String seedDirPath, Boolean isInputFile, String outputDirPath) {
         this.targetPath = targetPath;
+        this.targetArgs = targetArgs != null ? targetArgs : new String[]{}; // 如果没有命令行参数，则使用空数组
+        this.isInputFile = isInputFile;
         this.seedQueue = new LinkedList<>();
         this.logger = new Logger(outputDirPath);
         this.mutator = new Mutator(outputDirPath);
@@ -79,6 +83,7 @@ public class Executor {
                     System.err.println("执行种子时发生错误: " + e.getMessage());
                     seed.setCrash(true); // 标记为崩溃种子
                     // 记录崩溃种子
+                    crashCount++;
                     logger.logCrashSeed(seed);
                 } finally {
                     curProcessedSeeds.add(seed);
@@ -121,15 +126,36 @@ public class Executor {
 
     private void executeSeed(Seed seed) throws IOException, InterruptedException {
         long startTime = System.nanoTime();
-        // 创建一个 ProcessBuilder 来启动目标程序
-        ProcessBuilder processBuilder = new ProcessBuilder("afl-showmap", "-o", "-", "--", targetPath);
-        Process process = processBuilder.start();
-        // 将种子数据传递给目标程序的标准输入
-        try (OutputStream os = process.getOutputStream();
-             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os))) {
-            writer.write(new String(Files.readAllBytes(seed.getFile().toPath())));
-            writer.flush();
+
+        // 创建命令行参数
+        List<String> command = new ArrayList<>();
+        command.add("afl-showmap");  // 固定命令 part
+        command.add("-o");           // 输出重定向参数
+        command.add("-");            // 输出到标准输出（由后续代码处理）
+        command.add("--");           // 表示命令行参数分隔符
+        command.add(targetPath);     // 添加目标程序路径
+
+        // 如果有额外的命令行参数，添加到命令中
+        if (targetArgs != null) {
+            command.addAll(Arrays.asList(targetArgs));
         }
+
+        if (!isInputFile) {
+            command.add(seed.seedPath);  // 添加种子文件路径
+        }
+        // 创建一个 ProcessBuilder 来启动目标程序
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
+        Process process = processBuilder.start();
+
+        if (isInputFile) {
+            // 将种子数据传递给目标程序的标准输入
+            try (OutputStream os = process.getOutputStream();
+                 BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os))) {
+                writer.write(new String(Files.readAllBytes(seed.getFile().toPath())));
+                writer.flush();
+            }
+        }
+
         // 读取目标程序的输出并解析覆盖路径
         long incrementCoverage = 0;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
@@ -138,15 +164,18 @@ public class Executor {
                 // 使用正则表达式验证行格式
                 if (line.matches("\\d{6}:\\d+")) {
                     // 提取路径标识并存储到 coveragePaths 中
-                    if (!coveragePaths.contains(line.split(":")[0])) {
+                    String pathId = line.split(":")[0];
+                    if (!coveragePaths.contains(pathId)) {
                         incrementCoverage++;
                     }
-                    coveragePaths.add(line.split(":")[0]);
+                    coveragePaths.add(pathId);
                 }
             }
         }
-        int exitCode = process.waitFor();
+
+        int exitCode = process.waitFor();  // 等待进程执行完毕
         long endTime = System.nanoTime();
+
         // 更新种子信息
         seed.updateExecutionTime((endTime - startTime) / 1_000_000); // 转换为毫秒
         seed.updateCoverage(coveragePaths.size()); // 更新当前覆盖度
@@ -158,6 +187,7 @@ public class Executor {
             totalExecutionTime += seed.getExecuteTime();
         }
     }
+
 
     private void printInfo() {
         long currentTime = System.nanoTime();
