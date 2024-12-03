@@ -34,7 +34,6 @@ public class Executor {
         initialSeedQueue(seedDirPath);
         startCoverageCurveScheduler();
         startInfoScheduler();
-        startAnalysisScheduler();
         this.startTime = System.nanoTime();
     }
 
@@ -60,12 +59,6 @@ public class Executor {
         infoScheduler.scheduleAtFixedRate(() -> {
             printInfo();
         }, 1, 1, TimeUnit.SECONDS);
-    }
-
-    private void startAnalysisScheduler() {
-        analysisScheduler.scheduleAtFixedRate(() -> {
-            DataAnalyzer.runDataAnalysisScript();
-        }, 20, 20, TimeUnit.SECONDS);
     }
 
     public void execute() throws IOException {
@@ -120,8 +113,6 @@ public class Executor {
         scheduler.shutdown();
         infoScheduler.shutdown();
         analysisScheduler.shutdown();
-        // 调用数据分析脚本
-        DataAnalyzer.runDataAnalysisScript();
     }
 
     private void executeSeed(Seed seed) throws IOException, InterruptedException {
