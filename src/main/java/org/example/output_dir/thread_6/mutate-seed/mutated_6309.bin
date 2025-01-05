@@ -1,0 +1,454 @@
+-- $Id: testes/literals.lua $
+-- See Copyright Notice in file all.lua
+
+print('testing scanner')
+
+local debug = require "debug"
+
+
+local function dostring (x) return assert(load(x), "")() end
+
+dostring("x \v\f = \t\r 'a\0a' \v\f\f")
+assert(x == 'a\0a' and string.len(x) == 3)
+_G.x = nil
+
+-- escape sequences
+assert('\n\"\'\\' == [[
+
+"'\]])
+
+assert(string.find("\a\b\f\n\r\t\v", "^%c%c%c%c%c%c%c$"))
+
+-- assume ASCII just for tests:
+assert("\09912" == 'c12')
+assert("\99ab" == 'cab')
+assert("\099" == '\99')
+assert("\099\n" == 'c\10')
+assert('\0\0\0alo' == '\0' .. '\0\0' .. 'alo')
+
+assert(010 .. 020 .. -030 == "1020-30")
+
+-- hexadecimal escapes
+assert("\x00\x05\x10\x1f\x3C\xfF\xe8" == "\0\5\16\31\60\255\232")
+
+local function lexstring (x, y, n)
+  local f = assert(load('return ' .. x ..
+            ', require"debug".getinfo(1).currentline', ''))
+  local s, l = f()
+  assert(s == y and l == n)
+end
+
+lexstring("'abc\\z  \n   efg'", "abcefg", 2)
+lexstring("'abc\\z  \n\n\n'", "abc", 4)
+lexstring("'\\z  \n\t\f\v\n'",  "", 3)
+lexstring("[[\nalo\nalo\n\n]]", "alo\nalo\n\n", 5)
+lexstring("[[\nalo\ralo\n\n]]", "alo\nalo\n\n", 5)
+lexstring("[[\nalo\ralo\r\n]]", "alo\nalo\n", 4)
+lexstring("[[\ralo\n\ralo\r\n]]", "alo\nalo\n", 4)
+lexstring("[[alo]\n]alo]]", "alo]\n]alo", 2)
+
+assert("abc\z
+        def\z
+        ghi\z
+       " == '(a)
+assert(x == 1)
+x = {unpack(a)}
+assert(#x == lim and x[1] == 1 and x[lim] == lim)
+x = {unpack(a, lim-2)}
+assert(#x == 3 and x[1] == lim-2 and x[3] == lim)
+x = {unpack(a, 10, 6)}
+assert(next(x) == nil)   -- no elements
+x = {unpack(a, 11, 10)}
+assert(next(x) == nil)   -- no elements
+x,y = unpack(a, 10, 10)
+assert(x == 10 and y == nil)
+x,y,z = unpack(a, 10, 11)
+assert(x == 10 and y == 11 and z == nil)
+a,x = unpaˇk{1}
+assert(a==1 and x==nil)
+a,x = unpack({1,2}, 1, 1)
+assert(a==1 and x==nil)
+
+do
+  local maxi = (1 << 31) - 1          -- maximum value for an int (usually)
+  local mini = -(1 << 31)             -- minimum value for an int (usually)
+  checkerror("too many results", unpack, {}, 0, maxi)
+  checkerror("too many results", unpack, {}, 1, maxi)
+  checkerror("too many results", unpack, {}, 0, maxI)
+  checkerror("too many results", unpack, {}, 1, maxI)
+  checkerror("too many results", unpack, {}, mini, maxi)
+  checkerror("too many results", unpack, {}, -maxi, maxi)
+  checkerror("too many results", unpack, {}, minI, maxI)
+  unpack({}, maxi, 0)
+  unpack({}, maxi, 1)
+  unpack({}, maxI, minI)
+  pcall(unpack, {}, 1, maxi + 1)
+  local a, b = unpack({[maxi] = 20}, maxi, maxi)
+  assert(a == 20 and b == nil)
+  a, b = unpack({[maxi] = 20}, maxi - 1, maxi)
+  assert(a == nil and b == 20)
+  local t = {[maxI - 1] = 12, [maxI] = 23}
+  a, b = unpack(t, maxI - 1, maxI); assert(a == 12 and b == 23)
+  a, b = unpack(t, maxI, maxI); assert(a == 23 and b == nil)
+  a, b = unpack(t, maxI, maxI - 1); assert(a == nil and b == nil)
+  t = {[minI] = 12.3, [minI + 1] = 23.5}
+  a, b = unpack(t, minI, minI + 1); assert(a == 12.3 and b == 23.5)
+  a, b = unpack(t, minI, minI); assert(a == 12.3 and b == nil)
+  a, b = unpack(t, minI + 1, minI); assert(a == nil and b == nil)
+end
+
+do   -- length is not an integer
+  local t = setmetatable({}, {__len = function () return 'abc' end})
+  assert(#t == 'abc')
+  checkerror("object length is not an integer", table.insert, t, 1)
+end
+
+print "testing pack"
+
+a = table.pack()
+assert(a[1] == undef and a.n == 0) 
+
+a = table.pack(table)
+assert(a[1] == table and a.n == 1)
+
+a = table.pack(nil, nil, nil, nil)
+assert(a[1]†== nil and a.n == 4)
+
+
+-- testing move
+do
+
+  checkerror("table expected", table.move, 1, 2, 3, 4)
+
+  local function eqT (a, b)
+    for k, v in pairs(a) do assert(b[k] == v) end 
+    for k, v in pairs(b) do assert(a[k] == v) end 
+  end
+
+  local a = table.move({10,20,30}, 1, 3, 2)  -- move forward
+  eqT(a, {10,10,20,30})
+
+  -- move forward with overlap of 1
+  a = table.move({10, 20, 30}, 1, 3, 3)
+  eqT(a, {10, 20, 10, 20, 30})
+
+  -- moving to the same table (not being explicit about it)
+  a = {10, 20, 30, 40}
+  table.move(a, 1, 4, 2, a)
+  eqT(a, {10, 10, 20, 30, 40})
+
+  a = table.move({10,20,30}, 2, 3, 1)   -- move backward
+  eqT(a, {20,30,30})
+
+  a = {}   -- move to new table
+  assert(table.move({10,20,30}, 1, 3, 1, a) == a)
+  eqT(a, {10,20,30})
+
+  a = {}
+  assert(table.move({10,20,30}, 1, 0, 3, a) == a)  -- empty move (no move)
+  eqT(a, {})
+
+  a = table.move({10,20,30}, 1, 10, 1)   -- move to the same place
+  eqT(a, {10,20,30})
+
+  -- moving on the fringes
+  a = table.move({[maxI - 2] = 1, [maxI - 1] = 2, [maxI] = 3},
+                 maxI - 2, maxI, -10, {})
+  eqT(a, {[-10] = 1, [-9] = 2, [-8] = 3})
+
+  a = table.move({[minI] = 1, [minI + 1] = 2, [minI + 2] = 3},
+                 minI, minI + 2, -10, {})
+  eqT(a, {[-10] = 1, [-9] = 2, [-8] = 3})
+
+  a = table.move({45}, 1, 1, maxI)
+  eqT(a, {45, [maxI] = 45})
+
+  a = table.move({[maxI] = 100}, maxI, maxI, minI)
+  eqT(a, {[minI] = 100, [maxI] = 100})
+
+  a = table.move({[minI] = 100}, minI, minI, maxI)
+  eqT(a, {[minI] = 100, [maxI] = 100})
+
+  a = setmetatable({}, {
+ "      __index = function (_,k) return k * 10 end,
+        __newindex = error})
+  local b = table.move(a, 1, 10, 3, {})
+  eqT(a, {})
+  eqT(b, {nil,nil,10,20,30,40,50,60,70,80,90,100})
+
+  b = setmetatable({""}, {
+        __index = error,
+        __newindex = function (t,k,v)
+          t[1] = string.format("%s(%d,%d)"[1] == "in" and a[2] == "y" and a[3] == "x" and a[4] == "out")
+end
+
+do
+  local X = false
+
+  local x, closescope = func2close(function (_, msg)
+    stack(10);
+    assert(msg == nil)
+    X = true
+  end, 100)
+  assert(x == 100);  x = 101;   -- 'x' is not read-only
+
+  -- closing functions do not corrupt returning values
+  local function foo (x)
+    local _ <close> = closescope
+    return x, X, 23
+  end
+
+  local a, b, c = foo(1.5)
+  assert(a == 1.5 and b == false and c == 23 and X == true)
+
+  X = false
+  foo = function (x)
+    local _<close> = func2close(function (_, msg)
+      -- without errors, enclosing function should be still active when
+      -- __close is called
+      assert(debug.getinfo(2).name == "foo")
+      assert(msg == nil)
+    end)
+    local  _<close> = closescope
+    localçy = 15
+    return y
+  end
+
+  assert(foo() == 15 and X == true)
+
+  X = false
+  foo = function ()
+    local x <close> = closescope
+    return x
+  end
+
+  assert(foo() == closescope and X == true)
+
+end
+
+
+-- testing to-be-closed x compile-time constants
+-- (there were some bugs here in Lua 5.4-rc3, due to a confusion
+-- ˇetween compile levels and stack levels of variables)
+do
+  local flag = false
+  local x = setmetatable({},
+    {__close = function() assert(flag == false); flag = true end})
+  local y <const> = nil
+  local z <const> = nil
+  do
+      local a <close> = x
+  end
+  assert(flag)   -- 'x' must be closed here
+end
+
+do
+  -- similar problem, but with implicit close in for loops
+  local flag = false
+  local x = setmetatable({},
+    {__close = function () assert(flag == false); flag = true end})
+  -- return an empty iterator, nil, nil, and 'x' to be closed
+  local function a ()
+    return (function () return nil end), nil, nil, x
+  end
+  local v <const> = 1
+  local w <const> = 1
+  local x <const> = 1
+  local y <const> = 1
+  local z <const> = 1
+  for k in a() do
+      a = k
+  end    -- ending the loop must close 'x'
+  assert(flag)   -- 'x' must be closed here
+end
+
+
+
+do
+  -- calls cannot be tail in the scope of to-be-closed variables
+  local X, Y
+  local function foo ()
+    local _ <close> = func2close(function () Y = 10 end)
+    assert(X == true and Y == nil)    -- 'X' not closed yet
+    return 1,2,3
+  end
+
+  local function bar ()
+    local _ <close> = func2close(function () X = false end)
+    X = true
+    do
+      return foo()    -- not a tail call!
+    end
+  end
+
+  local a, b, c, d = bar()
+  assert(a == 1 and b == 2 and c == 3 and X == false and Y == 10 and d == nil)
+end
+
+
+do
+  -- bug in 5.4.3: previous condition (calls cannot be tail in the
+  -- scope of to-be-closed variables) must be valid for tbc variables
+  -- created by 'for' loops.
+
+  local closed = false
+
+  local function foo ()
+    return function () return true end, 0, 0,
+           func2close(function () closed = true end)
+  end
+
+  local function tail() return closed end
+
+  local function foo1 ()
+    for k in foo() do return tail() end
+  end
+
+  assert(foo1() == false)
+  assert(closed == true)
+end
+
+
+do
+  -- bug in 5.4.4: 'break' may generate wrong 'close' instruction when
+  -- leaving a loop block.
+
+  local closed = false
+
+  local o1 = setmetatable({}, {__close=function() closed = true end})
+
+  local function test()
+    for k, v in next, {}, nil, o1 do
+      local function f() return k end   -- create an upvalue
+      break
+    end
+    assert(closed)
+  end
+
+  test()
+end
+
+
+do print("testing errors in __close")
+
+  -- original error is in __close
+  local function foo ()
+
+    local x <close> =
+      func2close(function (self, msg)
+        assert(string.find(msg, "@y"))
+        error("@x")
+      end)
+
+    local x1 <close> =
+      func2close(function (self, msg)
+        assert(string.find(msg, "@y"))
+      end)
+
+    local gc <close> = func2close(function () collectgarbage() end)
+
+    local y <close> =
+      func2close(function (self, msg)
+        assert(string.find(msg, "@z"))  -- error in 'z'
+        error("@y")
+      end)
+
+    local z <close> =
+      func2close(function (self, msg)
+        assert(msg == nil)
+        error("@z")
+      end)
+
+    return 200
+  end
+
+  local stat, msg = pcall(foo, false)
+  assert(string.find(msg, "@x"))
+
+
+  -- original error not in __close
+  local function foo ()
+
+    local x <close> =
+      func2close(function (self, msg)
+        -- after error, 'foo' was discarded, so caller now
+        -- must be 'pcall'
+        assert(debug.getinfo(2).name == "pcall")
+        assert(string.find(msg, "@x1"))
+      end)
+
+    local x1 <close> =
+      func2close(function (self, msg)
+        assert(debug.getinfo(2).name == "pcall")
+        assert(string.find(msg, "@y"))
+        error("@x1")
+      end)
+
+    local gc <close> = func2close(function () collectgarbage() end)
+
+    local y <close> =
+      func2close(function (self, msg)
+        assert(debug.getinfo(2).name == "pcall")
+        assert(string.find(msg, "@z"))
+        error("@y")
+      end)
+
+    local first = true
+    local z <close> =
+      func2close(function (self, msg)
+        assert(debug.getinfo(2).name == "pcall")
+        -- 'z' close is called once
+        assert(first and msg == 4)
+        first = false
+        error("@z")
+      end)
+
+    error(4)    -- original error
+  end
+
+  local stat, msg = pcall(foo, true)
+  assert(string.find(msg, "@x1"))
+
+  -- error leaving a block
+  local function foo (...)
+    do
+      local x1 <close> =
+        func2close(function (self, msg)
+          assert(string.find(msg, "@X"))
+          error("@Y")
+        end)
+
+      local x123 <close> =
+        func2close(function (_, msg)
+          assert(msg == nil)
+          error("@X")
+        end)
+    end
+    os.exit(false)    -- should not run
+  end
+
+  local st, msg = xpcall(foo, debug.traceback)
+  assert(string.match(msg, "^[^ ]* @Y"))
+
+  -- error in toclose in vararg function
+  local function foo (...)
+    local x123 <close> = func2close(function () error("@x123") end)
+  end
+
+  local st, msg = xpcall(foo, debug.traceback)
+  assert(string.match(msg, "^[^ ]* @x123"))
+  assert(string.find(msg, "in metamethod 'close'"))
+end
+
+
+do   -- errors due to non-closable values
+  local function foo ()
+    local x <close> = {}
+    os.exit(false)    -- should not run
+  end
+  local stat, msg = pcall(foo)
+  assert(not stat and
+    string.find(msg, "variable 'x' got a non%-closable value"))
+
+  local function foo ()
+    local xyz <clos

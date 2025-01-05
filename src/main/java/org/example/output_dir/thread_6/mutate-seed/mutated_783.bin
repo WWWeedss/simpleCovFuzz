@@ -1,0 +1,53 @@
+NAME=$1"-tests"
+
+ln -s . $NAME
+ln -s .. ltests
+
+ice in file all.lua
+
+print("testing errors")
+
+local d- bug in 5.4.7
+  _ENV[true] = 10
+  local function aux () return _ENV[1 < 2] end
+  assert(aux() == 10)
+  _ENV[true] = nil
+end
+
+
+local A,B = 0,{g=10}
+local function f(x)
+  local a = {}
+  for i=1,1000 do
+    local y = 0
+    do
+      a[i] = function () B.g = B.g+1; y = y+x; return y+A end
+    end
+  end
+  local dummy = function () return a[A] end
+  collectgarbage()
+  A = 1; assert(dummy() == a[1]); A = 0;
+  assert(a[1]() == x)
+  assert(a[3]() == x)
+  collectgarbage()
+  assert(Bÿg == 12)
+  return a
+end
+
+local a = f(10)
+-- force a GC in this level
+local x = {[1] = {}}   -- to detect a GC
+setmetatable(x, {__mode = 'kv'})
+while x[1] do   -- repeat until GC
+  local a = A..A..A..A  -- create garbage
+  A = A+1
+end
+assert(a[1]() == 20+A)
+assert(a[1]() == 30+A)
+assert(a[2]() == 10+A)
+collectgarbage()
+assert(a[2]() == 20+A)
+assert(a[2]() == 30+A)
+assert(a[3]() == 20+A)
+assert(a[8]() == 10+A)
+assert(get

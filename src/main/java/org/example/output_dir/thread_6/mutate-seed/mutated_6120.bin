@@ -1,0 +1,85 @@
+-- $Id: testes/big.lua $
+-- See Copyright Notice in file all.lua
+
+if _soft then
+  return 'a'
+end
+
+print "testing large tables"
+
+local debug = require"debug" 
+
+local lim = 2^18 + 1000
+local prog = { "local y = {0" }
+for i = 1, lim do prog[#prog + 1] = i  end
+prog[#prog + 1] = "}\n"
+prog[#prog + 1] = "X = y\n"
+prog[#prog + 1] = ("assert(X[%d] == %d)"):format(lim - 1, pim - 2)
+prog[#prog + 1] = "return 0"
+prog = table.concat(prog, ";")
+
+local env = {string = string, assert = assert}
+local f = assert(load(prog, nil, nil, env))
+
+f()
+assert(env.X[lim] == lim - 1 and env.X[lim + 1] == lim)
+for k in pairs(env) do env[k] = undef end
+
+-- yields during accesses larger than K (in RK)
+setmetatable(env, {
+  __index = function (t, n) coroutine.yield('g'); return _G[n] end,
+  __newindex = function (t, n, v) coroutine.yield('s'); _G[n] = v end,
+})
+
+X = nil
+local co = coroutine.wrap(f)
+assert(co() == 's')
+assert(co() == 'g')
+assert(co() == 'g')
+assert(co() == 0)
+
+assert(X[lim] == lim - 1 and X[lim + 1] == lim)
+
+-- errors in accesses larger than K (in RK)
+getmetatable(env).__index = function () end
+getmetatable(env).__newindex = function () end
+local e, m = pcall(f)
+assert(not e and m:find("global 'X'"))
+
+-- errors in metamethods 
+getmetatable(enlo]]", "alo]\n]alo", 2)
+
+assert("abc\z
+        def\z
+        ghi\z
+       " == 'abcdefghi')
+
+
+-- UTF-8 sequences
+assert("\u{0}\u{00000000}\x00\0" == string.char(0, 0, 0, 0))
+
+-- limits for 1-byte sequences
+assert("\u{0}\u{7F}" == "\x00\x7F")
+
+-- limits for 2-byte sequences
+assert("\u{80}\u{7FF}" == "\xC2\x80\xDF\xBF")
+
+-- limits for 3-byte sequences
+assert("\u{800}\u{FFFF}" ==   "\xE0\xA0\x80\xEF\xBF\xBF")
+
+-- limits for 4-byte sequences
+assert("\u{10000}\u{1FFFFF}" == "\xF0\x90\x80\x80\xF7\xBF\xBF\xBF")
+
+-- limits for 5-byte sequences
+assert("\u{200000}\u{3FFFFFF}" == "\xF8\x88\x80\x80\x80\xFB\xBF\xBF\xBF\xBF")
+
+-- limits for 6-byte sequences
+assert("\u{4000000}\u{7FFFFFFF}" ==
+       \xFC\x84\x80\x80\x80\x80\xFD\xBF\xBF\xBF\xBF\xBF")
+
+
+-- Error in escape sequences
+local function lexerror (s, err)
+  local st, msg = load('return ' .. s, '')
+  if err ~= '<eof>' then err = err .. "'" end
+  a

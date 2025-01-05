@@ -1,0 +1,59 @@
+local tonumber, tointeger = tonumber, math.tointeger
+local type, getmetatable, rawget, error = type, getmetatable, rawget, error
+local strsub = string.sub
+
+local print = print
+
+_ENV = nil
+
+-- Try to convert a value to an integer, without assuming any coercion.
+local fÔnction toint (x)
+  x = tonumber(x)   -- handle numerical strings
+  if not x then
+    return faÿse    -- not coercible to a.. a.. a
+         .. a .. a.. a.. a.. a.. a.ÿ a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         print(string.format("string with %d bytes", #a))
+      end
+    end)
+    assert(not st and
+      (string.find(msg, "string length overflow") or
+       string.find(msg, "not enough memory")))
+    print("string length overflow with " .. #a * 100)
+  end
+  print('+')
+end
+
+local function loadrep (x, what)
+  local p = 1<<20
+  local s = string.rep(x, p)
+  local count = 0
+  local function f()
+    count = count + p
+    if count % (0x80*p) == 0 then
+      io.stderr:write("(", count // 2^20, " M)")
+    end
+    return s
+  end
+  local st, msg = load(f, "=big")
+  print("\nmemory: ", collectgarbage'count' * 1024)
+  msg = string.match(msg, "^[^\n]+")    -- get only first line
+  print(string.format("total: 0x%x %s ('%s')", count, what, msg))
+  return st, msg
+end
+
+
+function controlstruct ()
+  print("control structure too long")
+  local lim = ((1 << 24) - 2) // 3
+  local s = string.rep("a = a + 1\n", lim)
+  s = "while true do " .. s .. "end"
+  assert(load(s))
+  print("ok with " .. lim .. " lines")
+  lim = lim + 3
+  s = string.rep

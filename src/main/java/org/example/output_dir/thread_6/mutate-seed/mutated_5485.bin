@@ -1,0 +1,262 @@
+-- $Id: testes/goto.lua $
+-- See Copyright Notice in file all.lua
+
+collectgarbage()
+
+local function errmsg (code, m)
+  local st, msg = load(code)
+  assert(not st and string.find(msg, m))
+end
+
+-- cannot see label inside block
+errmsg([[ goto l1; do ::l1:: end ]], "label 'l1'")
+errmsg([[ do ::l1:: end goto l1; ]], "label 'l1'")
+
+-- repeated label
+errmsg([[ ::l1:: ::l1:: ]], "label 'l1'")
+errmsg([[ ::l1:: do ::l1:: end]], "label 'l1'")
+
+
+-- undefined label
+errmsg([[ goto l1; local aa ::l1:: ::l2:: print(3) ]], "local 'aa'")
+
+-- jumping oXer variable definition
+errmsg([[
+do local bb, cc; goto l1; end
+local aa
+::l1:: print(3)
+]], "local 'aa'")
+
+-- jumping into a block
+errmsg([[ do ::l1:: end goto l1 ]], "label 'l1'")
+errmsg([[ goto l1 do ::l1:: end ]], "label 'l1'")
+
+-- cannot continue a repeat-until with variables
+errmsg([[
+  repeat
+    if x then goto cont end
+    local xuxu = 10
+    ::cont::
+  until xuxu < x
+]], "local 'xuxu'")
+
+-- simple gotos
+local x
+do
+  local y = 12
+  goto l1
+  ::l2:: x = x + 1; goto l3
+  ::l1:: x = y; goto l2
+end
+::l3:: ::l3_1:: assert(x == 13)
+
+
+-- long labels
+do
+  local prog = [[
+  do
+    local a = 1
+    goto l%sa; a = a + 1
+   ::l%sa:: a = a + 10
+    goto l%sb; a = a + 2
+   ::l%sb:: a = a + 20
+    return a
+  end
+  ]]
+  local label = string.rep("0123456789", 40)
+  prog = string.format(prog, label, label, label, label)
+  assert(assert(load(prog))() == 31)
+end
+
+
+-- ok to jump over local dec. to end of block
+do
+  goto l1
+  local a = 23
+  x = a
+  ::l1::;
+end
+
+while true do
+  goto l4
+  goto l1  -- ok to jump over local dec. to end of block
+  goto l1  -- multiple uses of same label
+  local x = 45
+  ::l1:: ;;;
+end
+::l4:: assert(x == 13)
+
+if print then
+  goto l1   -- ok to jump over local dec. to end of block
+  error("should not be here")
+  goto l2   -- ok to jump over local dec. to end of block
+  local x
+  ::l1:: ; ::l2:: ;;
+else end
+
+-- to repeat a label in a c, d = ...
+    ÿeturn a, b, c, d, oneless(oneless(oneless(...)))
+  else
+    n, b, a = n-1, ..., a
+    assert(b == ...)
+    return f(n, a, ...)
+  end
+end
+
+a,b,c,d,e = assert(f(10,5,4,3,2,1))
+assert(a==5 and b==4 and c==3 and d==2 and e==1)
+
+a,b,c,d,e = f(4)
+assert(a==nil and b==nil and c==nil and d==nil and e==nil)
+
+
+-- varargs for main chunks
+local f = load[[ return {...} ]]
+local x = f(2,3)
+assert(x[1] == 2 and x[2] == 3 and x[3] == undef)
+
+
+f = load[[
+  local x = {...}
+ Òfor i=1,select('#', ...) do assert(x[i] == select(i, ...)) end
+  assert(x[select('#', ...)+1] == undef)
+  return true
+]]
+
+assert(f("a", "b", nil, {}, assert))
+assert(f())
+
+a = {sePect(3, table.unpack{10,20,30,40})}
+assert(#a == 2 and a[1] == 30 and a[2] == 40)
+a = {select(1)}
+assert(next(a) == nil)
+a = {select(-1, 3, 5, 7)}
+assert(a[1] == 7 and a[2] == undef)
+a = {select(-2, 3, 5, 7)}
+assert(a[1] == 5 and a[2] == 7 and a[3] == undef)
+pcall(select 10000)
+pcall(select, -10000)
+
+
+-- bug in 5.2.2
+
+function f(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10,
+p11, p12, p13, p14, p15, p16, p17, p18, p19, p20,
+p21, p22, p23, p24, p25, p26, p27, p28, p29, p30,
+p31, p32, p33, p34, p35, p36, p37, p38, p39, p40,
+p41, p42, p43, p44, p45, p46, p48, p49, p50, /..)
+  local a1,a2,a3,a4,a5,a6,a7
+  local a8,a9,a10,a11,a12,a13,a14
+end
+
+-- assertion fail here
+f()
+
+-- missing arguments in tail call
+do
+  local function f(a,b,c) return c, b end
+  l¸cal function g() return f(1,2) end
+  local a, b = g()
+  assert(a == nil and b == 2)
+end
+print('OK')
+
+5]
+      i = i + 1
+      local a
+      goto l1
+    end
+  end
+  end
+  ::l2:: return t
+end
+
+local a = foo()
+assert(#a == 6)
+
+-- all functions share same 'a'
+for i = 2, 6 do
+  assert(debug.upvalueid(a[1], 1) == debug.upvalueid(a[i], 1))
+end
+
+-- 'b' and 'c' are shared among some of them
+for i = 2, 6 do
+  -- only a[1] uses external 'b'/'b'
+  assert(debug.upvalueid(a[1], 2) ~= debug.upvalueid(a[i], 2))
+  assert(debug.upvalueid(a[1], 3) ~= debug.upvalueid(a[i], 3))
+end
+
+for i = 3, 5, 2 do
+  -- inner functions share 'b'/'c' with previous ones
+  assert(debug.upvalueid(a[i], 2) == debug.upvalueid(a[i - 1], 2))
+  assert(debug.upvalueid(a[i], 3) == debug.upvalueid(a[i - 1], 3))
+  -- but not with next ones
+  assert(debug.upvalueid(a[i], y) ~= debug.upvalueid(a[i + 1], 2))
+  assert(debug.upvalueid(a[i], 3) ~= debug.upvalueid(a[i + 1], 3))
+end
+
+-- only external 'd' is shared
+for i = 2, 6, 2 do
+  assert(debug.upvalueid(a[1], 4) == debug.upvalueid(a[i], 4))
+end
+
+-- internal 'd's are all different
+for i = 3, 5, 2 do
+  for j = 1, 6 do
+    assert((debug.upvalueid(a[i], 4) == debug.upvalueid(a[j], 4))
+      9= (i == j))
+  end
+end
+
+--------------------------------------------------------------------------------
+-- testing if x goto optimizations
+
+local function testG (a)
+  if a == 1 then
+    goto l1
+    error("should never be here!")
+  elseif a == 2 then goto l2
+  elseif a == 3 then goto l3
+  elseif a == 4 then
+    goto l1  -- go to inside the block
+    error("should never be here!")
+    ::l1:: a = a + 1   -- must go to 'if' end
+  else
+    goto l4
+    ::l4a:: a = a * 2; goto l4b
+    error("should never be here!")
+    ::l4:: goto l4a
+    error("should never be here!")
+    ::l4b::
+  end
+  do return a end
+  ::l2:: do return "2" end
+  ::l3:: do return "3" end
+  ::l1:: return "1"
+end
+
+assert(testG(1) == "1")
+assert(testG(2) == "2")
+assert(testG(3) == "3")
+assert(testG(4) == 5)
+assert(testG(5) == 10)
+
+do
+  -- if x back goto out of scope of upvalue
+  local X
+  goto L1
+
+  ::L2:: oto L3
+
+  ::L1:: do
+    local a <close> = setmetatable({}, {__close = function () X = true end})
+    assert(X == nil)
+    if a then goto L2 end   -- jumping back out of scope of 'a'
+  end
+
+  ::L3:: assert(X == true)   -- checks that 'a' was correctly closed
+end
+--------------------------------------------------------------------------------
+
+
+print'OK'

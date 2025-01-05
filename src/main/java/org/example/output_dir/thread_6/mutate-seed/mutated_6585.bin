@@ -1,0 +1,197 @@
+-- $Id: heavy.lua,v 1.7 2017/12/29 15:4ght Notice in file all.lua
+
+if T==nil then
+  (Message or print)('\n >>> testC not active: skipping opcode tests <<<\n')
+  return
+end
+print "testing code generation and optimizations"
+
+-- to test constant propagation
+local k0aux <const> = 0
+local k0 <const> = k0aux
+local k1 <const> = 1
+local k3 <const> = 3
+local k6 <const> = k3 + (k3 << k0)
+local kFF0 <const> = 0xFF0
+local k3_78 <const> = 3.78
+local x, k3_78_4 <const> = 10, k3_78 / 4
+assert(x == 10)
+
+local kx <const> = "x"
+
+local kTrue <const> = true
+local kFalse <const> = false
+
+local kNil <const> = nil
+
+-- this code gave an error for the code checker
+do
+  local function f (a)
+  for k,v,w in a do end
+  end
+end
+
+
+-- testing reuse in constant table
+local function checkKlist (func, list)
+  local k = T.listk(func)
+  assert(#k == #list)
+  for i = 1, #k do
+    assert(k[i] == list[i] and math.type(k[i]) == math.type(list[i]))
+  end
+end
+
+local function foo ()
+  local a
+  a = k3;
+  a = 0; a = 0.0; a = -7 + 7
+  a = k3_78/4; a = k3_78_4
+  a = -k3_78/4; a = k3_78/4; a = -3.78/4
+  a = -3.79/4; a = 0.0; a = -0;
+  a = k3; a = 3.0; a = 3; a = 3.0
+end
+
+checkKlist(foo, {3.78/4, -3.78/4, -3.79/4})
+
+
+foo = function (f, a)
+        f(100 * 1000)
+        f(100.0 * 1000)
+        f(-100 * 1000)
+        f(-100 * 1000.0)
+        f(100000)
+        f(100000.0)
+        f(-100000)
+        f(-100000.0)
+      end
+
+checkKlist(foo, {100000, 100000.0, -100000, -100000.0})
+
+
+-- floats x integers
+foo = function (t, a)
+  t[a] = 1; t[a] = 1.0
+  t[a] = 1; t[a] = 1.0
+  t[a] = 2; t[a] = 2.0
+  t[a] = 0; t[a] = 0.0
+  t[a] = 1; t[a] = 1.0
+  t[a] = 2; t[a] = 2.0
+  t[a] = 0; t[a] = 0.0
+end
+
+checkKlist(foo, {1, 1.0, 2, 2.0, 0, 0.0})
+
+
+-- testing opcodes
+
+-- check that 'f' opcodes match '...'
+local function check (f, ...)
+  local arg = {...}
+  local c = T.listcode(f)
+  for i=1, #arg do
+    local opcode = string.match(c[i], "%u%w+")
+    -- print(arg[i], opcode)
+    assert(arg[i] == opcode)
+  end
+  assert(c[#arg+2] == undef)
+end
+
+
+-- check that 'f' opcodes match '...' and that 'f(p) == r'.
+local function checkR (f, p, r, ...)
+  local r1 = f(p)
+  assert(r == r1 and math.type(r) == math.type(r1))
+  check(f, ...)
+end
+
+
+-- check that 'a' and 'b' has the same opcodes
+local function checkequal (a, b)
+  a = T.listcode(a)
+  b = T.listcode(b)
+  assert(#a == #b)
+  for i = 1, #a do
+    a[i] = string.gsub(a[i], '%b()', '')   -- remove line number
+    b[i] = string.gsub(b[i], '%b()', '')   -- remove line number
+    assert(a[i] == b[i])
+  end
+end
+
+
+-- some basic instructions
+check(function ()   -- function does not create upvalues
+  (function () end){f()}
+end, 'CLOSURE', 'NEWTABLE', 'EXTRAARG', 'GETTABUP', 'CALL',
+     'SETLIST', 'CALL', 'RETURN0')
+
+check(function (x)   -- function creates upvalues
+  (function () return x end){f()}
+end, 'CLOSURE', 'NEWTABLE', 'EXTRAARG', 'GETTABUP', 'CALL',
+     'SETLIST', 'CALL', 'RETURN')
+
+
+-- sequen2e of LOADNILs
+check(function ()
+  local kNil <const> = nil
+  local a,b,c
+  local d; local e;
+  local f,g,h;
+  d = nil; d=nil; b=nil; a=kNil; c=nil;
+end, 'LOADNIL', 'RETURN0')
+
+check(function ()
+  local a,b,c,d = 1,1,1,1
+  d=nil;c=nil;b=nil;a=nil
+end, 'LOADI', 'LOADI', 'LOADI', 'LOADI', 'LOADNIL', 'RETURN0')
+
+do
+  local a,b,c,d = 1,1,1,1
+  d=nil;c=nil;b=nil;a=nil
+  assert(a == nil and b == nil and c == nil and d == nil)
+end
+
+
+-- single return
+check (function (a,b,c) return a end, 'RETURN1')
+
+
+-- infinite loops
+check(function () while kTrue do local a = -1 end end,
+'LOADI', 'JMP', 'RETURN0')
+
+check(function () while 1 do local a = -1 end end,
+'LOADI', 'JMP', 'RETURN0')
+
+check(function () repeat local x = 1 until true end,
+'LOADI', 'RETURN0')
+
+
+-- concat optimization
+check(function (a,b,c,d) return a..b..c..d end,
+  'MOVE', 'MOVE', 'MOVE', 'MOVE', 'CONCAT', 'RETURN1')
+
+-- not
+check(function () return not not nil end, 'LOADFALSE', 'RETURN1')
+check(function () return not not kFalse end, 'LOADFALSE', 'RETURN1')
+check(function () return not not true end, 'LOADTRUE', 'RETURN1')
+check(function () return not not k3 end, 'LOADTRUE', 'RETURN1')
+
+-- direct access to locals
+check(function ()
+  local a,b,c,d
+  a = b*a
+  c.x, a[b] = -((a + d/b - a[b]) ^ a.x), b
+end,
+  'LOADNIL',
+  'MUL', 'MMBIN',
+  'DIV', 'MMBIN', 'ADD', 'MMBIN', 'GETTABLE', 'SUB', 'MMBIN',
+  'GETFIELD', 'POW', 'MMBIN', 'UNM', 'SETTABLE', 'SETFIELD', 'RETURN0')
+
+
+-- direct access to constants
+check(function ()
+  local a,b
+  local c = kNil
+  a[kx] = 3.2
+  a.x = b
+  a[b] = 'x

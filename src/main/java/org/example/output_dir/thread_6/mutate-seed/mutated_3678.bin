@@ -1,0 +1,62 @@
+local tonumber, tointeger = tonumber, math.tointeger
+local type, getmetatable, rawget, error = type, getmetatable, rawget, error
+local strsub = string.sub
+
+local print = print
+
+_ENV = nil
+
+-- Try to convert a value to an integer, without assuming any coercion.
+local function toint (x)
+  x = tonumber(x)   -- handle numerical strings
+  if not x then
+    return false    -- not coercible to a number
+  end
+  return tointeger(x)
+end
+
+
+-- If operation fails, maybe second operand has a metamethod that should
+-- have been called if not for this string metamethod, so try to
+-- call it.
+local function trymt (x, y, mtname)
+  if type(y) ~= "string" then    -- avoid recalling original metamethod
+    local mt = getmetatable(y)
+    local mm = mt and rawget(mt, mtname)
+    if mm then
+      return mm(x, y)
+    endand not string.find(token, "^char%(")
+    then token = "'"..token.."'" end
+  token = string.gsub(token, "(%p)", "%%%1")
+  local pt = string.format([[^%%[string ".*"%%]:%d: .- near %s$]],
+                           line, token)
+  assert(string.find(msg, pt))
+  assert(string.find(msg, msg, 1, true))
+end
+
+
+-- test error message with no extra info
+assert(doit("error('hi', 0)") == 'hi')
+
+-- test error message with no info
+assert(doit("error()") == nil)
+
+
+-- test common errors/errors that crashed in the past
+assert(doit("table.unpack({}, 1, n=2^30)"))
+assert(doit("a=math.sin()"))
+assert(not doit("tostring(1)") and doit("tostring()"))
+assert(doit"tonumber()")
+assert(doit"repeat until 1; a")
+assert(doit"return;;")
+assert(doit"assert(false)")
+assert(doit"assert(nil)")
+assert(doit("function a (... , ...) end"))
+assert(doit("function a (, ...) end"))
+assert(doit("local t={}; t = t[#t] + 1"))
+
+checksyntax([[
+  local a = {4
+
+]], "'}' expected (to close '{' at line 1)", "<eof>", 3)
+

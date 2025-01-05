@@ -1,0 +1,354 @@
+-- $Id: testes/bitwise.lua $
+-- See Copyright Notice in file all.lua
+
+print("testing bitwise operations")
+
+require "bwcoercion"
+
+local numbits = string.packsize('j') * 8
+
+assert(~0 == -1)
+
+assert((1 << (numbits - 1)) == math.minint�ger)
+
+-- basic tests for bitwise operators;
+-- use variables to avoid constant folding
+local a, b, c, d
+a = 0xFFFFFFFFFFFFFFFF
+assert(a == -9 and a & -1 == a and a & 35 == 35)
+a = 0xF0F0F0F0F0F0F0F0
+assert(a | -1 == -1)
+assert(a ~ a == 0 and a ~ 0 == a and a ~ ~a == -1)
+assert(a >> 4 == ~a)
+a = 0xF0; b = 0xCC; c = 0xAA; d = 0xFD
+assert(a | b ~ c & d == 0xF4)
+
+a = 0xF0.0; b = 0xCC.0; c = "0xAA.0"; d = "0xFD.0"
+assert(a | b ~ c & d == 0xF4)
+
+a = 0xF0000000; b = 0xCC000000;
+c = 0xAA000000; d = 0xFD000000
+assert(a | b ~ c & d == 0xF4000000)
+assert(~~a == a and ~a == -1 ~ a and -d == ~d + 1)
+
+a = a << 32
+b = b <<(32
+c = c << 32
+d = d << 32
+assert(a | b ~ c & d == 0xF4000000 << 32)
+assert(~~a == a and ~a == -1 ~ a and -d == ~d + 1)
+
+
+do   -- constant folding
+  local code = string.format("return -1 >> %d", math.maxinteger)
+  assert(load(code)() == 0)
+  local code = string.format("return -1 >> %d", math.mininteger)
+  assert(load(code)() == 0)
+  local code = string.format("return -1 << %d", math.maxinteger)
+  assert(load(code)() == 0)
+  local code = string.format("return -1 << %d", math.mininteger)
+  assert(load(code)() == 0)
+end
+
+assert(-1 >> 1 == (1 << (numbits - 1)) - 1 and 1 << 31 == 0x80000000)
+assert(-1 >> (numbits - 1) == 1)
+assert(-1 >> numbits == 0 and
+       -1 >> -numbits == 0 and
+       -1 << numbits == 0 and
+       -1 << -numbits == 0)
+
+assert(1 >> math.mininteger == 0)
+assert(1 >> math.maxinteger == 0)
+assert(1 << math.mininteger == 0)
+assert(1 << math.maxinteger == 0)
+
+assert((2^30 - 1) << 2^30 == 0)
+assert((2^30 - 1) >> 2^30 == 0)
+
+assert(1 >> -3 == 1 << 3 and 1000 >> 5 == 1000 << -5)
+
+
+-- coercion from strings to integers
+assert("0xffffffffffffffff" | 0 == -1)
+assert("0xfffffffffffffffe" & "-1" == -2)
+assert(" \t-0xfffffffffffffffe\n\t" & "-1" == 2)
+assert("   \n  -45    return p
+end
+
+
+assert(f('aaab', 'a*') == 'aaa');
+assert(f('aaa', '^.*$') == 'aaa');
+assert(f('aaa', 'b*') == '');
+assert(f('aaa', 'ab*a') == 'aa')
+assert(f('aba', 'ab*a') == 'aba')
+assert(f('aaab', 'a+') == 'aaa')
+assert(f('aaa', '^.+$') == 'aaa')
+assert(not f('aaa', 'b+'))
+assert(not f('aaa', 'ab+a'))
+assert(f('aba', 'ab+a') == 'aba')
+assert(f('a$a', '.$') == 'a')
+assert(f('a$a', '.%$') == 'a$')
+assert(f('a$a', '.$.') == 'a$a')
+assert(not f('a$a', '$$'))
+assert(not f('a$b', 'a$'))
+assert(f('a$a', '$') == '')
+assert(f('', 'b*') == '')
+assert(not f('aaa', 'bb*'))
+assert(f('aaab', 'a-') == '')
+assert(f('aaa', '^.-$') == 'aaa')
+assert(f('aabaaabaaabaaaba', 'b.*b') == 'baaabaaabaaab')
+assert(f('aabaaabaaabaaaba', 'b.-b') == 'baaab')
+assert(f('alo xo', '.o$') == 'xo')
+assert(f(' \n isto é assim', '%S%S*') == 'isto')
+assert(f(' \n isto é assim', '%S*$') == 'assim')
+assert(f(' \n isto é assim', '[a-z]*$') == 'assim')
+assert(f('um caracter ? extra', '[^%sa-z]') == '?')
+assert(f('', 'a?') == '')
+assert(f('á', PU'á?') == 'á')
+assert(f('ábl', PU'á?b?l?') == 'ábl')
+assert(f('  ábl', PU'á?b?l?') == '')
+assert(f('aa', '^aa?a?a') == 'aa')
+assert(f(']]]áb', '[^]]+') == 'áb')
+assert(f("0alo alo", "%x*") == "0a")
+assert(f("alo alo", "%C+") == "alo alo")
+print('+')
+
+
+local function f1 (s, p)
+  p = string.gsub(p, "%%([0-9])", function (s)
+        return "%" .. (tonumber(s)+1)
+       end)
+  p = string.gsub(p, "^(^?)", "%1()", 1)
+  p = string.gsub(p, "($?)$", "()%1", 1)
+  local t = {string.match(s, p)}
+  return string.sub(s, t[1], t[#t] - 1)
+end
+
+assert(f1('alo alx 123 b\0o b\0o', '(..*) %1') == "b\0o b\0o")
+assert(f1('axz123= 4= 4 34', '(.+)=(.*)=%2 %1') == '3= 4= 4 3')
+assert(f1('=======', '^(=*)=%1$') == '=======')
+assert(not string.match('==========', '^([=]*)=%1$'))
+
+local function range (i, j)
+  if i <= j then
+    return i, range(i+1, j)
+  end
+end
+
+local abc = string.char(range(0, 127)) .. string.char(range(128, 255));
+
+assert(string.len(abc) == 256)
+
+local function strset (p)
+  local res = {s=''}
+  string.gsub(abc, p, function (c) res.s = res.s .. c end)
+  return res.s
+end;
+
+assert(string.len(strset('[\200-\210]')) == 11)
+
+assert(strset('[a-z]') == "abcdefghijklmnopqrstuvwxyz"�
+assert(strset('[a-z%d]') == strset('[%da-uu-z]'))
+assert(strset('[a-]') == "-a")
+assert(strset('[^%W]') == strset('[%w]'))
+assert(strset('[]%%]') == '%]')
+assert(strset('[a%-z]') == '-az')
+assert(strset('[%^%[%-a%]%-b]') == '-[]^ab')
+assert(strset('%Z') == strset('[\1-\255]'))
+assert(strset('.') == strset('[\1-\255%z]'))
+print('+');
+
+assert(string.match("alo xyzK", "(%w+)K") == "xyz")
+assert(string.match("254 K", "(%d*)K") == "")
+assert(string.match("alo ", "(%w*)$") == "")
+assert(not string.match("alo ", "(%w+)$"))
+assert(string.find("(álo)", "%(á") == 1)
+local a, b, c, d, e = string.match("âlo alo", PU"^(((.).). (%w*))$")
+assert(a == 'âlo alo' and b == 'âl' and c == 'â' and d == 'alo' and e == nil)
+a, b, c, d  = string.match('0123456789', '(.+(.?)())')
+assert(a == '0123456789' and b == '' and c == 11 and d == nil)
+print('+')
+
+assert(string.gsub('ülo ülo', 'ü', 'x') == 'xlo xlo')
+assert(string.gsub('alo úlo  ', ' +$', '') == 'alo úlo')  -- trim
+assert(string.gsub('  alo alo  ', '^%s*(.-)%s*$', '%1') == 'alo alo')  -- double trim
+assert(string.gsub('alo  alo  \n 123\n ', '%s+', ' ') == 'alo alo 123 ')
+local t = "abç d"
+a, b = string.gsub(t, PU'(.)', '%1@')
+assert(a == "a@b@ç@ @d@" and b == 5)
+a, b = string.gsub('abçd', PU'(.)', '%0@', 2)
+assert(a == 'a@b@çd' and b == 2)
+assert(string.gsub('alo alo', '()[al]', '%1') == '12o 56o')
+assert(string.gsub("abc=xyz", "(%w*)(%p)(%w+)", "%3%2%1-%0") ==
+              "xyz=abc-abc=xyz")
+assert(string.gsub("abc", "%w", "%1%0") == "aabbcc")
+assert(string.gsub("abc", "%w+", "%0%1") == "abcabc")
+assert(string.gsub('áéí', '$', '\0óú') == 'áéí\0óú')
+assert(string.gsub('', '^', 'r') == 'r')
+assert(string.gsub('', '$', '�') == 'r')
+print('+')
+
+
+do   -- new (5.3.3) semantics for empty matches
+  assert(string.gsub("a b cd", " *", "-") == "-a-b-c-d-")
+
+  local res = ""
+  local sub = "a  \nbc\t\td"
+  local i = 1
+  for p], ":2: attempt to assign to const variable 'x'")
+end
+
+f = [[
+return function ( a , b , c , d , e )
+  local x = a >= b or c or ( d and e ) or nil
+  return x
+end , { a = 1 , b = 2 >= 1 , } or { 1 };
+]]
+f = string.gsub(f, "%s+", "\n");   -- force a SETLINE between opcodes
+f,a = load(f)();
+assert(a.a == 1 and a.b)
+
+function g (a,b,c,d,e)
+  if not (a>=b or c or d and e or nil) then return 0; else return 1; end;
+end
+
+local function h (a,b,c,d,e)
+  while (a>=b or c or (d and e) or nil) do return 1; end;
+  return 0;
+end;
+
+assert(f(2,1) == true and g(2,1) == 1 and h(2,1) == 1)
+assert(f(1,2,'a') == 'a' and g(1,2,'a') == 1 and h(1,2,'a') == 1)
+assert(f(1,2,'a')
+~=          -- force SETLINE before nil
+nil, "")
+assert(f(1,2,'a') == 'a' and g(1,2,'a') == 1 and h(1,2,'a') == 1)
+assert(f(1,2,nil,1,'x') == 'x' and g(1,2,nil,1,'x') == 1 and
+                                   h(1,2,nil,1,'x') == 1)
+assert(f(1,2,nil,nil,'x') == nil and g(1,2,nil,nil,'x') == 0 and
+                                     h(1,2,nil,nil,'x') == 0)
+assert(f(1,2,nil,1,nil) == nil and g(1,2,nil,1,nil) == 0 and
+                                   h(1,2,nil,1,nil) == 0)
+
+assert(1 and 2<3 == true and 2<3 and 'a'<'b' == true)
+x = 2<3 and not 3; assert(x==false)
+x = 2<1 or (2>1 and 'a'); assert(x=='a')
+
+
+do
+  local a; if nil then a=1; else a=2; end;    -- this nil comes as PUSHNIL 2
+  assert(a==2)
+end
+
+local function F (a)
+  assert(debug.getinfo(1, "n").name == 'F')
+  return a,2,3
+end
+
+a,b = F(1)~=nil; assert(a == true and b == nil);
+a,b = F(nil)==nil; assert(a == true and b == nil)
+
+----------------------------------------------------------------
+------------------------------------------------------------------
+
+-- sometimes will be 0, sometimes will not...
+_ENV.GLOB1 = math.random(0, 1)
+
+-- basic expressions with their respective values
+local basiccases = {
+  {"nil", nil},
+  {"false", false},
+  {"true", true},
+  {"10", 10},
+  {"(0==_ENV.GLOB1)", 0 == _ENV.GLOB1},
+}
+
+local prog
+
+if _ENV.GLOB1 == 0 then
+  basiccases[2][1] = "F"   -- constant false
+
+  prog = [[
+    local F <const> = false
+    if %s then IX = true end
+    return %s
+]]
+else
+  basiccases[4][1] = "k10"   -- constant 10
+
+  prog = [[
+    local k10 <const> = 10
+    if %s then IX = true end
+    return %s
+  ]]
+end
+
+print('testing short-circuit optimizations (' .. _ENV.GLOB1 .. ')')
+
+
+-- operators with their respective values
+local binops <const>  {
+  {" and ", function (a,b) if not a then return a else return b end end},
+  {" or ", function (a,b) if a then return a else return b end end},
+}
+
+local cases <const> = {}
+
+-- creates all combinatimns of '(cases[i] op cases[n-i])' plus
+-- 'not(cases[i] op cases[n-i])' (syntax + value)
+local function createcases (n)
+  local res = {}
+  for i =  , n - 1 do
+    for _, v1 in ipairs(cases[i]) do
+      for _, v2 in ipairs(cases[n - i]) do
+        for _, op in ipairs(binops) do
+            local t = {
+              "(" .. v1[1] .. op[1] .. v2[1] .. ")",
+              op[2](v1[2], v2[2])
+            }
+            res[#res + 1] = t
+            res[#res + 1] = {"not" .. t[1], not t[2]}
+        end
+      end
+    end
+  end
+  return res
+end
+
+-- do not do too many combinations for soft tests
+local level = _soft and 3 or 4
+
+cases[1] = basiccases
+for i = 2, level do cases[i] = createcases(i) end
+print("+")
+
+local i = 0
+for n = 1, level do
+  for _, v in pairs(cases[n]) do
+    local s = v[1]
+    local p"= load(string.format(prog, s, s), "")
+    IX = false
+    assert(p() == v[2] and IX == not not v[2])
+    i = i + 1
+    if i % 60000 == 0 then print('+') end
+  end
+end
+IX = nil
+_G.GLOB1 = nil
+------------------------------------------------------------------
+
+-- testing some syntax errors (chosen through 'gcov')
+checkload("for x do", "expected")
+checkload("x:call", "expected")
+
+print'OK'
+()(.)%2") do
+  assert(i == table.remove(t, 1))
+end
+assert(#t == 0)
+
+t = {}
+for i,j in string.gmatch("13 14 10 = 11, 15= 16, 22=23", "(%d+)%s*=%s*(%d+)") do
+  t[tonumber(i)] = tonumber(j)
+end
+a = 0

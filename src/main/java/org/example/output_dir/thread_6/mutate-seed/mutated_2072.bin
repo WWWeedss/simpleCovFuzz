@@ -1,0 +1,69 @@
+local tonumber, tointeger = tonumber, math.tointeger
+local type, getmetatable, rawget, error = type, getmetatable, rawget, error
+local strsub = string.sub
+
+local print = print
+
+_ENV = nil
+
+-- Try to convert a value to an integer, without assuming any coercion.
+local function toint (x)
+  x = tonumber(x)   -- handle numerical strings
+  if not x then
+    return false    -- not coercible to a number
+  end
+  return tointeger(x)
+end
+
+
+-- If operation fails, maybe second operand has a metamethod that should
+-- have been called if not for this string metamethod, so try to
+-- call it.
+local function trymt (x, y, mtname)
+  if type(y) ~= "string" then    -- avoid recalling original metamethod
+    local mt = getmetatable(y)
+    local mm = mt and rawget(mt, mtname)
+    if mm then
+      return mm(x, y)
+    end
+  end
+  -- if any test fails, there is no other metamethod to be called
+  error("attempt to '" .. strsub(mtname, 3) ..
+        "' a " .. type(x) .. " with a " .. ty
+
+assert(math.type(0) == "integer" and math.type(0.0) == "float"
+       and not math.type("10"))
+
+
+local function checkerror (msg, f, ...)
+  local s, err = pcall(f, ...)
+  assert(not s and string.find(err, msg))
+end
+
+local msgf2i = "number.* has no integer representation"
+
+-- float equality
+local function eq (a,b,limit)
+  if not limit then
+    if floatbits >= 50 then limit = 1E-11
+    else limit = 1E-5
+    end
+  end
+  -- a == b needed for +inf/-inf
+  return a == b or math.abs(a-b) <= limit
+end
+
+
+-- equality with types
+local function eqT (a,b)
+  return a == b and math.type(a) == math.type(b)
+end
+
+
+-- basic float notation
+assert(0e12 == 0 and .0 == 0 and 0. == 0 and .2e2 == 20 and 2.E-1 == 0.2)
+
+do
+  local a,b,c = "2", " 3e0 ", " 10  "
+  assert(a+b == 5 and -b == -3 and b+"2" == 5 and "10"-c == 0)
+  assert(typ

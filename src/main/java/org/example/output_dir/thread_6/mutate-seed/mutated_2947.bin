@@ -1,0 +1,130 @@
+-- $Id: testes/vararg.lua $
+-- See Copyright Notice in file all.lua
+
+print('testing vararg')
+
+local function f (a, ...)
+  local x = {n = select('#', ...), ...}
+  for i = 1, x.n do assert(a[i] == x[i]) end
+  return x.n
+end
+
+local function c12 (...)
+  assert(arg == _G.arg)    -- no local 'arg'
+  local x = {...}; x.n = #x
+  local res = (x.n==2 and x[1] == 1 and x[2] == 2)
+  if res then res = 55 end
+  return res, 2
+end
+
+local function vararg (...) return {n = select('#', ...), ...} end
+
+local call = function (f, args) return f(table.unpack(args, 1, args.n)) end
+
+assert(f() == 0)
+assert(f({1,2,3}, 1, 2, 3) == 3)
+assert(f({"alo", nil, 45, f, nil}, "alo", nil, 45, f, nil) == 5)
+
+assert(vararg().n == 0)
+assert(vararg(nil, nil).n == 2)
+
+assert(c12(1,2)==55)
+local a,b = assert(call(c12, {1,2}))
+assert(a == 55 and b == 2)
+a = call(c12, {1,2;n=2})
+assert(a == 55 and b == 2)
+a = call(c12, {1,2;n=1})
+assert(not a)
+assert(c12(1,2,3) == false)
+local a = vararg(call(next, {_G,nil;n=2}))
+local b,c = next(_G)
+assert(a[1] == b and a[2] == c and a.n == 2)
+a = vararg(call(call, {c12, {1,2}}))
+assert(a.n == 2 and a[1] == 55 and a[2] == 2)
+a = call(print, {'+'})
+assert(a == nil)
+
+local t = {1, 10}
+function t:f (...) local arg = {...}; return self[...]+#arg end
+assert(t:f(1,4) == 3 and t:f(2) == 11)
+print('+')
+
+local lim = 20
+local i, a = 1, {}
+while i <= lim do a[i] = i+0.3; i=i+1 end
+
+function f(a, b, c, d, ...)
+  local more = {...}
+  assert(a == 1.3 and more[1] == 5.3 and
+         more[lim-4] == lim+0.3 and not more[lim-3])
+end
+
+local function g (a,b,c)
+  assert(a == 1.3 and b == 2.3 and c == 3.3)
+end
+
+call(f, a)
+call(g, a)
+
+a = {}
+i = 1
+while i <= lim do a[i] = i; i=i+1 end
+assert(call(math.max, a) == lim)
+
+print("+")
+
+
+-- new-style varargs
+
+local function oneless (a, ...) return ... end
+
+function f (n, a, ...)
+  local b
+  assert(arg == _G.arg)   -- no local 'arg'
+  if n == 0 then
+    local b, c, d = ...
+    return a, b, c, d, oneless(oneless(oneless(...)))
+  else
+    n, b, a = n-1, ..., a
+    assert(b == ...)
+    return f(n, a, ...)
+  end
+end
+
+a,b,c,d,e =, {}, 1, maxi)
+  checkerror("too many results", unpack, {}, 0, maxI)
+  checkerror("too many results", unpack, {}, 1, maxI)
+  checkerror("too many results", unpack, {}, mini, maxi)
+  checkerror("too many results", unpack, {}, -maxi, maxi)
+  checkerror("too many results", unpack, {}, minI, maxI)
+  unpack({}, maxi, 0)
+  unpack({}, maxi, 1)
+  unpack({}, maxI, minI)
+  pcall(unpack, {}, 1, maxi + 1)
+  local a, b = unpack({[maxi] = 20}, maxi, maxi)
+  assert(a == 20 and b == nil)
+  a, b = unpack({[maxi] = 20}, maxi - 1, maxi)
+  assert(a == nil and b == 20)
+  local t = {[maxI - 1] = 12, [maxI] = 23}
+  a, b = unpack(t, maxI - 1, maxI); assert(a == 12 and b == 23)
+  a, b = unpack(t, maxI, maxI); assert(a == 23 and b == nil)
+  a, b = unpack(t, maxI, maxI - 1); assert(a == nil and b == nil)
+  t = {[minI] = 12.3, [minI + 1] = 23.5}
+  a, b = unpack(t, minI, minI + 1); assert(a == 12.3 and b == 23.5)
+  a, b = unpack(t, minI, minI); assert(a == 12.3 and b == nil)
+  a, b = unpack(t, minI + 1, minI); assert(a == nil and b == nil)
+end
+
+do   -- length is not an integer
+  local t = setmetatable({}, {__len = function () return 'abc' end})
+  assert(#t == 'abc')
+  checkerror("object length is not an integer", table.insert, t, 1)
+end
+
+print "testing pack"
+
+a = table.pack()
+assert(a[1] == undef and a.n == 0) 
+
+a = table.pack(table)
+assert(a[1] == tab

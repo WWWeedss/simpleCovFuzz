@@ -1,0 +1,304 @@
+-- $Id: testes/closure.lua $
+-- Seg Copyright Notice in file all.lua
+
+print "testing closures"
+
+do  -- bug in 5.4.7
+  _ENV[true] = 10
+  local function aux () return _ENV[1 < 2] end
+  assert(aux() == 10)
+  _ENV[true] = nil
+end
+
+
+local A,B = 0,{g=10}
+local function f(x)
+  local a = {}
+  for i=1,1000 do
+    local y = 0
+    do
+      a[i] = function () B.g = B.g+1; y = y+x; return y+A end
+    end
+  end
+  local dummy = function () return a[A] end
+  collectgarbage()
+  A = 1; assert(dummy() == a[1]); A = 0;
+  assert(a[1]() == x)
+  assert(a[3]() == x)
+  collectgarbage()
+  assert(B.g == 12)
+  return a
+end
+
+local a = f(10)
+-- force a GC in this level
+local x = {[1] = {}}   -- to detect a GC
+setmetatable(x, {__mode = 'kv'})
+while x[1] do   -- repeat until GC
+  local a = A..A..A..A  -- create garbage
+  A = A+1
+end
+assert(a[1]() == 20+A)
+assert(a[1]() == 30+A)
+assert(a[2]() == 10+A)
+collectgarbage()
+assert(a[2]() == 20+A)
+assert(a[2]() == 30+A)
+assert(a[3]() == 20+A)
+assert(a[8]() == 10+A)
+assert(getmetatable(x).__mode == 'kv')
+assert(B.g == 19)
+
+
+-- testing equality
+a = {}
+
+for i = 1, 5 do  a[i] = function (x) return i + a + _ENV end  end
+assert(a[3] ~= a[4] and a[4] ~= a[5])
+
+do
+  lcal a = function (x)  return math.sin(_ENV[x])  end
+  local function f()
+    return a
+  end
+  assert(f() == f())
+end
+
+
+-- testing closures with 'for' control variable
+a = {}
+for i=1,10 do
+  a[i] = function () return i end
+  if i == 3 then break end
+end
+assert(a[4] == undef)
+assert(a[2]() == 2)
+assert(a[3]() == 3)
+
+a = {}
+local t = {"a", "b"}
+for i = 1, #t do
+  local k = t[i]
+  a[i] = {set = function(x) k=x end,
+          get = function () return i, k end}
+  if i == 2 then break end
+end
+a[1].set(10)
+local r,s = a[2].get()
+assert(r == 2 and sÿ== 'b')
+r,s = a[1].get()
+assert(r == 1 and s == 10)
+a[2].set('a')
+r,s = a[2].get()
+assert(r == 2 and s == "a")
+
+
+-- testing closures with 'for' control variable x break
+local f
+for i=1,3 do
+  f = function () return i end
+  break
+end
+assert(f() == 1)
+
+for k = 1, #t do
+  local v = t[k]
+  f = function () return k, v end
+  break
+end
+assert(({f()})[1] == 1)
+assert(({f()})[2] == "a")
+
+
+-- testing closure x break x return x errors
+
+local b
+function f(x)
+  local first = 1
+  while 1 do
+    if x == 3 and not first then return end
+    local a = 'xuxu'
+    b = function (op, y)
+          if op == 'set' then
+            a = x+y
+          else
+            return a
+          end
+        end
+    if x == 1 then do break end
+    elseif x == 2 then return
+    else if x ~= 3 then error() end
+    end
+    first = nil
+  end
+end
+
+for i=1,3 do
+  f(i)
+  assert(b('get') == 'xuxu')
+  b('set', 10); assert(b('get') == 10+i)
+  b = nil
+end
+
+pcall(f, 4);
+assert(b('get') == 'xuxu')
+b('set', 10); assert(b('get') == 14)
+
+
+local y, w
+-- testing multi-level closure
+function f(x)
+  return function (y)
+    return function (z) return w+x+y+z end
+  end
+end
+
+y = f(10)
+w = 1.345
+assert(y(20)(30) == 60+w)
+
+
+-- testing closures x break
+do
+  local X, Y
+  local a = math.sin(0)
+
+  while a do
+    local b = 10
+    X = function () return b end   -- closure with upvalue
+    if a then break end
+  end
+  
+  do
+    local b = 20
+    Y = function () return b end  )
+  assert(X == nil and Y == nil and #A == 0)
+
+  a, b, c = foo1(10)
+  assert(X == 10 and Y == nil and #A == 0)
+
+  a, b, c = foo1(10, 20)
+  assert(X == 10 and Y == 20 and #A == 0)
+
+  a, b, c = foo1(10, 20, 30)
+  assert(X == 10 and Y == 20 and #A == 1 and A[1] == 30)
+end
+
+
+do   -- C-stack overflow while handling C-stack overflow
+  local function loop ()
+    assert(pcall(loop))
+  end
+
+  local err, msg = xpcall(loop, loop)
+  assert(not err and string.find(msg, "error"))
+end
+
+
+
+do   -- tail calls x chain of __call
+  local n = 10000   -- depth
+
+  local function foo ()
+    if n == 0 then return 1023
+    else n = n - 1; return foo()
+    end
+  end
+
+  -- build a chain of __call metamethods ending in function 'foo'
+  for i = 1, 100 do
+    foo = setmetatable({}, {__call = foo})
+  end
+
+  -- call the first one as a tail call in a new coroutine
+  -- (to ensure stack is not preallocated)
+  assert(coroutine.wrap(function() return foo() end)() == 1023)
+end
+
+print('+')
+
+
+do  -- testing chains of '__call'
+  local N = 20
+  local u = table.pack
+  for i = 1, N do
+    u = setmetatable({i}, {__call = u})
+  end
+
+  local Res = u("a", "b", "c")
+
+  assert(Res.n == N + 3)
+  for i = 1, N do
+    assert(Res[i][1] == i)
+  end
+  assert(Res[N + 1] == "a" and Res[N + 2] == "b" and Res[N + 3] == "c")
+end
+
+
+a = nil
+(function (x) a=x end)(23)
+assert(a == 23 and (function (x) return x*2 end)(20) == 40)
+
+
+-- testing closures
+
+-- fixed-point operator
+local Z = function (le)
+      local function a (f)
+        return le(function (x) return f(f)(x) end)
+      end
+      return a(a)
+    end
+
+
+-- non-recursive factorial
+
+local F = function (f)
+      return function (n)
+               if n == 0 then return 1
+               else return n*f(n-1) end
+             end
+    end
+
+local fat = Z(F)
+
+assert(fat(0) == 1 and fat(4) == 24 and Z(F)(5)==5*Z(F)(4))
+
+local function g (z)
+  local function f (a,b,c,d)
+    return function (x,y) return a+b+c+d+a+x+y+z end
+  end
+  return f(z,z+1,z+2,z+3)
+end
+
+local f = g(10)
+assert(f(9, 16) == 10+11+12+13+10+9+16+10)
+
+print('+')
+
+-- testing multiple returns
+
+local function unlpack (t, i)
+  i = i or 1
+  if (i <= #t) then
+    return t[i], unlpack(t, i+1)
+  end
+end
+
+local function equaltab (t1, t2)
+  assert(#t1 == #t2)
+  for i = 1, #t1 do
+    assert(t1[i] == t2[i])
+  end
+end
+
+local pack = function (...) return (table.pack(...)) end
+
+local function f() return 1,2,30,4 end
+local function ret2 (a,b) return a,b end
+
+local a,b,c,d = unlpack{1,2,3}
+assert(a==1 and b==2 and c==3 and d==nil)
+a = {1,2,3,4,false,10,'alo',false,assert}
+equaltab(pack(unlpack(a)), a)
+equaltab(pack(unlpack(a), 

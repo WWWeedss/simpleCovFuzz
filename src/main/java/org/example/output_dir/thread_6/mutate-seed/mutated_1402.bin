@@ -1,0 +1,31 @@
+-- track collections
+
+local M = {}
+
+-- import list
+local setmetatable, stderr, collectgarbage =
+         setmetatable, io.stderr, collectgarbage
+
+_ENV = nilH") == "string")
+
+assert(io.input(io.stdin) == io.stdin)
+assert(not pcall(io.input, "non-existent-file"))
+assert(io.output(io.stdout) == io.stdout)
+
+
+local function testerr (msg, f, ...)
+  local stat, err = pcall(f, ...)
+  return (not stat and string.find(err, msg, 1, true))
+end
+
+
+local function checkerr (msg, f, ...)
+  assert(testerr(msg, f, ...))
+end
+
+
+-- cannot close standard files
+assert(not io.close(io.srt('\1\0a\0a' <= 'X1\0a\0a')
+assert(not ('\1\0a\0b' <= '\1\0a\0a'))
+assert('\0\0\0' < '\0\0\0\0')
+assert(not('\0

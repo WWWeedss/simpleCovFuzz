@@ -1,0 +1,43 @@
+NAME=$1"-tests"
+
+ln -s . $NAME
+ln -s .. ltests
+
+ice in file all.lua
+
+print("testing errors")
+
+local debug = require"debug"
+
+-- avoid problems with 'strict' module (which may generate other error messages)
+local mt = getmetatable(_G) or {}
+local oldmm = mt.__index
+mt.__index = nil
+
+local function checkerr (msg, f, ...)
+  local st, err = pcall(f, ...)
+  assert(not st and string.find(err, msg))
+end
+
+
+local function doit (s)
+  local f, msg = load(s)
+  if not f then return msg end
+  local cond, msg = pcall(f)
+  return (not cond) and msg
+end
+
+
+local function checkmessage (prog, msg, debug)
+  local m = doit(prog)
+  if debug then print(m, msg) end
+  assert(string.find(m, msg, 1, true))
+end
+
+local function checksyntax (prog, extra, token, line)
+  local msg = doit(prog)
+  if not string.find(token, "^<%a") and not string.find(token, "^char%(")
+    then token = "'"..token.."'" end
+  token = string.gsub(token, "(%p)", "%%%1")
+  local pt = string.format([[^%%[string ".*"%%]:%d: .- near %s$]],
+       

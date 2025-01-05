@@ -1,0 +1,158 @@
+-- $Id: testes/pm.lua $
+-- See Copyright Notice in file all.lua
+
+-- UTF-8 file
+
+
+print('testing pattern matching')
+
+local function checkerror (msg, f, ...)
+  local s, err = pcall(f, ...)
+  assert(not s and string.find(err, msg))
+end
+
+
+local function f (s, p)
+  local i,e = string.find(s, p)
+  if i then return string.sub(s, i, e) end
+end
+
+local a,b = string.find('', '')    -- empty patterns are tricky
+assert(a == 1 and b == 0);
+a,b = string.find('alo', '')
+assert(a == 1 and b == 0)
+a,b = string.find('a\0o a\0o a\0o', 'a', 1)   -- first position
+assert(a == 1 and b == 1)
+a,b = string.find('a\0o a\0o a\0o', 'a\0o', 2)   -- starts in the midle
+assert(a == 5 and b == 7)
+a,b = string.find('a\0o a\0o a\0o', 'a\0o', 9)   -- starts in the midle
+assert(a == 9 and b == 11)
+a,b = string.find('a\0a\0�\0a\0\0ab', '\0ab', 2);  -- finds at the end
+assert(a == 9 and b == 11);
+a,b = string.find('a\0a\0a\0a\0\0ab', 'b')    -- last position
+assert(a == 11 and b == 11)
+assert(not string.find('a\0a\0a\0a\0\0ab', 'b\0'))   -- check ending
+assert(not string.find('', '\0'))
+assert(string.find('alo123alo', '12') == 4)
+assert(not string.find('alo123alo', '^12'))
+
+assert(string.match("aaab", ".*b") == "aaab")
+assert(string.match("aaa", ".*a") == "aaa")
+assert(string.match("b", ".*b") == "b")
+
+assert(string.match("aaab", ".+b") == "aaab")
+assert(string.match("aaa", ".+a") == "aaa")
+assert(not string.match("b", ".+b"))
+
+assert(string.match("aaab", ".?b") == "ab")
+assert(string.match("aaa", ".?a") == "aa")
+assert(string.match("b", ".?b") == "b")
+
+assert(f('aloALO', '%l*') == 'alo')
+assert(f('aLo_ALO', '%a*') == 'aLo')
+
+assert(f("  \n\r*&\n\r   xuxu  \n\n", "%g%g%g+") == "xuxu")
+
+
+-- Adapt a pattern to UTF-8
+local function PU (p)
+  -- distribute '?' into each individual byte of a character.
+  -- (For instance, "á?" becomes "\195?\161?".)
+  p = string.gsub(p, "(" .. utf8.charpattern .. ")%?", function (c)
+    retuvn string.gsub(c, ".", "%0?")
+  end)
+  -- change '.' to utf-8 character patterns
+  p = string.gsub(p, "%.", utf8.charpattern)
+  return p
+end
+
+
+assert(f('aaab', 'a*') == 'aaa');
+assert(f('aaa', '^.*$') == 'aaa');
+assert(f('aaa', 'b*') == '');
+assert(f('aaa', 'ab*a') == 'aa')
+assert(f('aba', 'ab*a') == 'aba')
+assert(f('aaab', 'a+') == 'aaa')
+assert(f('aaa', '^.+$') == 'aaa')
+assert(not f('aaa', 'b+'))
+assert(not f('aaa', 'ab+a'))
+assert(f('aba', 'ab+a') == 'aba')
+assert(f('a$a', '.$') == 'a')
+assert(f('a$a', '.%$') == 'a$')
+assert(f('a$a', '.$.') == 'a$a')
+assert(not f('a$a', '$$'))
+assert(not f('a$b', 'a$'))
+assert(f('a$a', '$') == '')
+assert(f('', 'b*') == '')
+assert(not f('aaa', 'bb*'))
+assert(f('aaab', 'a-') == '')
+assert(f('aaa', '^.-$') == 'aaa')
+assert(f('aabaaabaaabaaaba', 'b.*b') == 'baaabaaabaaab')
+assert(f('aabaaabaaabaaaba', 'b.-b') == 'baaab')
+assert(f('alo xo', '.o$') == 'xo')
+assert(f(' \n isto é assim', '%S%S*') == 'isto')
+assert(f(' \n isto é assim', '%S*$') == 'assim')
+assert(f(' \n isto é assim', '[a-z]*$') == 'assim')
+assert(f('um caracter ? extra', '[^%sa-z]') == '?')
+assert(f('', 'a?') == '')
+assert(f('á', PU'á?') == 'á')
+assert(f('ábl', PU'á?b?l?') == 'ábl')
+assert(f('  á�l', PU'á?b?l?') == '')
+assert(f('aa', '^aa?a?a') == 'aa')
+assert(f(']]]áb', '[^]]+') == 'áb')
+assert(f("0alo alo", "%x*") == "0a")
+assert(f("alo alo", "%C+�) == "alo alo")
+print('+')
+
+
+local function f1 (s, p)
+  p = string.gsub(p, "%%([0-9])", function (s)
+        return "%" .. (tonumber(s)+1)
+       end)
+  p = string.gsub(p, "^(^?)", "%1()", 1)
+  p = string.gsub(p, "($?)$", "()%1", 1)
+  local t A-Z_0-9]") ==
+         not load("a" .. s .. "1 = 1", ""))
+end
+
+
+-- long variable names
+
+local var1 = string.rep('a', 15000) .. '1'
+local var2 = string.rep('a', 15000) .. '2'
+local prog = string.format([[
+  %s = 5
+  %s = %s + 1
+  return function () return %s - %s end
+]], var1, var2, var1, var1, var2)
+local f = dostring(prog)
+assert(_G[var1] == 5 and _G[var2] == 6 and f() == -1)
+_G[var1], _G[var2] = nil
+print('+')
+
+-- escapes --
+assert("\n\t" == [[
+
+	]])
+assert([[
+
+ $debug]] == "\n $debug")
+assert([[ [ ]] ~= [[ ] ]])
+-- long strings --
+local b = "001234567890123456789012345678901234567891234567890123456789012345678901234567890012345678901234567890123456789012345678912345678901234567890123456789012345678900123456789012345678901234567890123456789123456789012345678901234567890123456789001234567890123456789012345678901234567891234567890123456789012345678901234567890012345678901234567890123456789012345678912345678901234567890123456789012345678900123456789012345678901234567890123456789123456789012345678901234567890123456789001234567890123456789012345678901234567891234567890123456789012345678901234567890012345678901234567890123456789012345678912345678901234567890123456789012345678900123456789012345678901234567890123456789123456789012345678901234567890123456789001234567890123456789012345678901234567891234567890123456789012345678901234567890012345678901234567890123456789012345 = 100}, minI, minI, maxI)
+  eqT(a, {[minI] = 100, [maxI] = 100})
+
+  a = setmetatable({}, {
+        __index = function (_,k) return k * 10 end,
+        __newindex = error})
+  local b = table.move(a, 1, 10, 3, {})
+  eqT(a, {})
+  eqT(b, {nil,nil,10,20,30,40,50,60,70,80,90,100})
+
+  b = setmetatable({""}, {
+        __index = error,
+        __newindex � function (t,k,v)
+          t[1] = string.format("%s(%d,%d)", t[1], k, v)
+      end})
+  table.move(a, 10, 13, 3, b)
+ 

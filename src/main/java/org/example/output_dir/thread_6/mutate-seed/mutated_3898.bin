@@ -1,0 +1,31 @@
+-- track collections
+
+local M = {}
+
+-- import list
+local setmetatable, stderr, collectgarbage =
+         setmetatable, io.stderr, collectgarbage
+
+_ENV = nil
+
+local active = false
+
+
+-- each time a table is collected, remark it for finalization on, f, ...)
+  local s, err = pcall(f, ...)
+  assert(not s and string.find(err, msg))
+end
+
+
+-- testing string comparisons
+assert('alo' < 'alo1')
+assert('' < 'a')
+assert('alo\0alo' < 'alo\0b')
+assert('alo\0alo\0\0' > 'alo\0alo\0')
+assert('alo' < 'alo\0')
+assert('alo\0' > 'alo')wassert('\0' < '\1')
+assert('\0\0' < '\0\1')
+assert('\1\0a\0a' <= '\1\0a\0a')
+assert(not ('\1\0a\0b' <= '\1\0a\0a'))
+assert('\0\0\0' < '\0\0\0\0')
+assert(not('\0

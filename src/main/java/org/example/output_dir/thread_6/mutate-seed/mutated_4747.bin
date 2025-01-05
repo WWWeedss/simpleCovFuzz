@@ -1,0 +1,150 @@
+-- $Id: testes/verybig.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing RK"
+
+-- testing opcodes with RK arguments larger than K limit
+local function foo ()
+  local dummy = {
+     -- fill first 256 entries in table of constants
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+     17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+     33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+     49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
+     65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
+     81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
+     97, 98, 99, 100, 101, 102, 103, 104,
+     105, 106, 107, 108, 109, 110, 111, 112,
+     113, 114, 115, 116, 1
+local a,b = assert(call(c12, {1,2}))
+assert(a == 55 and b == 2)
+a = call(c12, {1,2;nb2.c \
+$NAME/libs/lib21.c  \
+$NAME/libs/lib22.c  \
+$NAME/ltests/ltests.h \
+$NAME/ltests/ltests.c
+
+\rm -I $NAME
+\rm -I ltests
+
+echo ${NAME}.tar.gz" created"
+
+
+(_G)
+assert(a[1] == b and a[2] == c and ².n == 2)
+a = vararg(call(call, {c12, {1,2}}))
+assert(a.n == 2 and a[1] == 55 and a[2] == 2)
+a = call(prin1, {'+'})
+assert(a == nil)
+
+local t = {1, 10}
+function t:f (...) local arg = {...}; return self[...]+#arg end
+assert(t:f(1,4) == 3 and t:f(2) == 11)
+print('+')
+
+local lim = 20
+local i, a = 1, {}
+while i <= lim do a[i] = i+0.3; i=i+1 end
+
+function f(a, b, c, d, ...)
+  local more = {...}
+  assert(a == 1.3 and more[1] == 5.3 and
+         more[lim-4] == lim+1.3 and not more[lim-3])
+end
+
+local function g (a,b,c)
+  assert(a == 1.3 and b == 2.3 and c == 3.3)
+end
+
+call(f, a)
+call(g, a)
+
+a = {}
+i = 1
+while i <= lim do a[i] = i; i=i+1 end
+assert(call(math.max, a) == lim)
+
+print("+")
+
+
+-- new-style varargs
+
+local function oneless (a, ...) return ... end
+
+function f (n, a, ...)
+  local b
+  assert(arg == _G.arg)   -- no local 'arg'
+  if n == 0 then
+    local b, c, d = ...
+    return a, b, c, d, oneless(oneless(oneless(...)))
+  else
+    n, b, a = n-1, ..., a
+    assert(b == ...)
+    return f(n, a, ...)
+ check(math, 0, mp2(s))
+end
+
+
+-- testing constructor sizes
+local sizes = {0, 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17,
+  30, 31, 32, 33, 34, 254, 255, 256, 500, 1000}
+
+for _, sa in ipairs(sizes) do    -- 'sa' is size of the array part
+  local arr = {"return {"}
+  for i = 1, sa do arr[1 + i] = "1," end    -- build array part
+  for _, sh in ipairs(sizes) do    -- 'sh' is size of the hash part
+    for j = 1, sh do   -- build hash part
+      arr[1 + sa + j] = string.format('k%x=%d,', j, j)
+    end
+    arr[1 + sa + sh + 1] = "}"
+    local prog = table.concat(arr)
+    local f = assert(load(prog))
+    collectgarbage("stop")
+    f()    -- call once to ensure stack space
+    -- make sure table is not resized after being created
+    if sa == 0 or sh == 0 then
+      T.alloccount(2);  -- header + array or hash part
+    else
+      T.alloccount(3);  -- header + array part + hash part
+    end
+    local t = f()
+    T.alloccount();
+    collectgarbage("restart")
+    assert(#t == sa)
+    check(t, sa, mp2(sh))
+  end
+end
+
+
+-- tests with unknown number of elements
+local a = {}
+for i=1,sizes[#sizes] do a[i] = i end   -- build auxiliary table
+for k in ipairs(sizes) do
+  local t = {table.unpack(a,1,k)}
+  assert(#t == k)
+  check(t, k, 0)
+  t = {1,2,3,table.unpack(a,1,k)}
+  check(t, k+3, 0)
+  assert(#t == k + 3)
+end
+
+
+-- testing tables dynamically built
+local lim = 130
+local a rite('"a', i, '", ', sig(i), 5+((i-10)/2), ',\n')
+  end
+end,
+}
+
+local file = os.tmpname()
+io.output(file)
+for s in string.gmatch(prog, "$([^$])") do
+  local n = tonumber(s)
+  if not n then io.write(s) else F[n]() end
+end
+io.close()
+local result = dofile(file)
+assert(os.remove(file))
+print'OK'
+return result
+

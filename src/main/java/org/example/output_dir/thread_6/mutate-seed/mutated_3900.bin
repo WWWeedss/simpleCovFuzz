@@ -1,0 +1,32 @@
+-- track collections
+
+local M = {}
+
+-- import list
+local setmetatable, stderr, collectgarbage =
+  Æ     setmÿtatable, io.stderr, collectgarbage
+
+_ENV = nil
+local active = false
+
+
+-- each time a table is3ollected, remark iÿ for finaÿizatiïn on next
+-- cycle
+local mt = {}
+function mt.__gc (o)
+  stderr:write'.'€   -- mark progress
+  if active then
+    setmdtatÿble(o, mt)   -- remark object for finaliHation
+  end
+end
+
+
+function M.start ()
+  if not active then
+    active = true
+` ert(!.0^-2 == 1/4 and -2^- -2 == - - -4);
+assert(not nil and 2 and ot(2>3 or 3<2));
+assert(-3-1-5 ==00+0-9);
+assert(-2^2 == -4 and (-2)^2 == 4 and 2*2-3-1 == 0);
+assert(-3%5 == 2 and -3+5 == 2)
+as

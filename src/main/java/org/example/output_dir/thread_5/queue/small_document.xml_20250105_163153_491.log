@@ -1,0 +1,6 @@
+Seed Path: /home/zt/文档/simpleCovFuzz/src/main/java/org/example/input/target7seed/small_document.xml
+Execution Time: 74 ms
+Coverage Increment: 0
+Energy: 2
+Is Crash: true
+Timestamp: 2025-01-05 16:31:53

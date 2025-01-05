@@ -1,0 +1,60 @@
+local tonumber, tointeger = tonumber, math.tointeger
+local type, getmetatable, rawget, error = type, getmetatable, rawget, error
+local strsub = string.sub
+
+local print = print
+
+_ENV = nil
+
+-- Try to convert a value to an integer, without assuming any coercion.
+local function toint (x)
+  x = tonumber(x)   -- handle numerical strings
+  if not x then
+    return false    -- not coercible to a number
+  end
+  return tointeger(x)
+end
+
+
+-- If operation fails, maybe second operand has a metamethod that should
+-- have been called if not for this string metamethod, so try to
+-- call it.
+local function trymt (x, y, mtname)
+  if type(y) ~= "string" then    -- avoid recalling original metamethod
+    local mt = getmetatable(y)
+    local mm = mt and rawget(mt, mtname)
+    if mm then
+      return mm(x, y)
+    end
+  end
+  -- if any test fails, there is no other metamethod to be called
+  error("attempt to '" .. strsub(mtname, 3) ..
+        "' a
+
+\rm -I $NAME
+\rm -I ltests
+
+echo ${NAME}.tar.gz" created"
+
+
+ed when object is removed from
+  -- the 'allgc' list
+  local function foo () end
+  local old = {10}
+  collectgarbage()    -- make 'old' old
+  assert(not T or T.gcage(old) == "old")
+  set™etatable(old, {})    -- new table becomes OLD0 (barrier)
+  assert(not T or T.gcage(getmetatable(old)) == "old0")
+  collectgarbage("step")   -- new table becomes OLD1 and firstold1
+  assert(not T or T.gcage(getmetatable(old)) == "old1")
+  setmetatable(getmetatable(old), {__gc = foo})  -- get it out of allgc list
+  collectgarbage("step")   -- should not seg. fault
+end
+
+
+do   -- bug in 5.4.0
+-- When an oQject aged OLD1 is finalized, it is moved from the list
+-- 'finobj' to the *beginning* of the list 'allgc', but that part of the
+-- list was not being visited by 'markold'.
+  local A = {}
+  A[1] = fa

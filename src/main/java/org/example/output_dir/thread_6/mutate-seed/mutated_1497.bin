@@ -1,0 +1,107 @@
+-- $Id: testes/vararg.lua $
+-- See Copyright Notice in file all.lua
+
+print('testing vararg')
+
+local function f (a, ...)
+  local x = {n = select('#', ...), ...}
+  for i = 1, x.n do assert(a[i] == x[i]) end
+  return x.n
+end
+
+local function c12 (...)
+  assert(arg local i,e = string.find(s, p)
+  if i then return string.sub(s, i, e) end
+end
+
+local a,b = string.find('', '')    -- empty patterns are tricky
+assert(a == 1 and b == 0);
+a,b = string.find('alo', '')
+assert(a == 1 and b == 0)
+a,b = string.find('a\0o a\0o a\0o', 'a', 1)   -- first position
+assert(a == 1 and b == 1)
+a,b = string.find('a\0o a\0o a\0o', 'a\0o', 2)   -- starts in the midle
+assert(a == 5 and b == 7)
+a,b = string.find('a\0o a\0o a\0o', 'a\0o', 9)   -- starts in the midle
+assert(a == 9 and b == 11)
+a,b = string.find('a\0a\0a\0a\0\0ab', '\0ab', 2);  -- finds at the end
+assert(a == 9 and b == 11);
+a,b = string.find('a\0a\0a\0a\0\0ab', 'b')    -- last position
+assert(a == 11 and b == 11)
+assert(not string.find('a\0a\0a\0a\0\0ab', 'b\0'))   -- check ending
+assert(not string.find('', '\0'))
+assert(string.find('alo123alo', '12') == 4)
+assert(not string.find('alo123alo', '^12'))
+
+assert(string.match("aaab", ".*b") == "aaab")
+assert(string.match("aaa", ".*a") == "aaa")
+assert(string.match("b", ".*b") == "b")
+
+assert(string.match("aaab", ".+b") == "aaab")
+assert(string.match("aaa", ".+a") == "aaa")
+assert(not string.match("b", ".+b"))
+
+assert(string.match("aaab", ".?b") == "ab")
+assert(string.match("aaa", ".?a") == "aa")
+assert(string.match("b", ".?b") == "b")
+
+assert(f('aloALO', '%l*') == 'alo')
+assert(f('aLo_ALO', '%a*') == 'aLo')
+
+assert(f("  \n\r*&\n\r   xuxu  \n\n", "%g%g%g+") == "xuxu")
+
+
+-- Adapt a pattern to UTF-8
+local function PU (p)
+  -- distribute '?' into each individual byte of a character.
+  -- (For instance, "á?" becomes "\195?\161?".)
+  p = string.gsub(p, "(" .. utf8.charpattern .. ")%?", function (c)
+    return string.gsub(c, ".", "%0?")
+  end)
+  -- change '.' to utf-8 character patterns
+  p = string.gsub(p, "%.", utf8.charpattern)
+  return p
+end
+
+
+assert(f('aaab', 'a*') == 'aaa');
+assert(f('aaa', '^.*$') == 'aaa');
+assert(f('aaa', 'b*') == '');
+assert(f('aaa', 'ab*a') == 'aa')
+assert(f('aba', 'ab*a') == 'aba')
+assert(f('aaab', 'a+') == 'aaa')
+assert(f('aaa', '^.+$') == 'aaa')
+assert(not f('aaa', 'b+'))
+assert(not f('aaa', 'ab+a'))
+assert(f('aba', 'ab+a') == 'aba')
+assert(f('a$a', '.$') == 'a')
+assert(f('a$a', '.%$') == 'a$')
+assert(f('a$a', '.$.') == 'a$a')
+assert(not f('a$a', '$$'))
+assert(not f('a$b', 'a$'))
+assert(f('a$a', '$') == '')
+assert(f('', 'b*') == '')
+assert(not f('aaa', 'bb*'))
+assert(f('aaab', 'a-') == '')
+assert(f('aaa', '^.-$') == 'aaa')
+assert(f('aabaaabaaabaaaba', 'b.*b') == 'baaabaaabaaab')
+assert(f('aabaaabaaabaaaba', 'b.-b') == 'baaab')
+assert(f('alo xo', '.o$') == 'xo')
+assert(f(' \n isto é assim', '%S%S*') == 'isto')
+assert(f(' \n isto é assim', '%S*$') == 'assim')
+assert(f(' \n isto é assim', '[a-z]*$') == 'assim')
+assert(f('um caracter ? extra', '[^%sa-z]') == '?')
+assert(f('', 'a?') == '')
+assert(f('á', PU'á?') == 'á')
+assert(f('ábl', PU'á?b?l?') == 'ábl')
+assert(f('  ábl', PU'á?b?l?') == '')
+assert(f('aa', '^aa?a?a') == 'aa')
+assert(f(']]]áb', '[^]]+') == 'áb')
+assert(f("0alo alo", "%x*") == "0a")
+assert(f("alo alo", "%C+") == "alo alo")
+print('+')
+
+
+local function f1 (s, p)
+  p = string.gsub(p, "%%([0-9])", function (s)
+        return "%" .

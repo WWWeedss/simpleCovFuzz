@@ -1,0 +1,55 @@
+local tonumber, tointeger = tonumber, math.tointeger
+local type, getmetatable, rawget, error = type, getmetatable, rawget, error
+local strsub = string.sub
+
+local print = print
+
+_ENV = nil
+
+-- Try to convert a value to an integer, without assuming any coercion.
+local function toint (x)
+  x = tonumber(x)   -- handle numerical strings
+  if not x then
+    return false    -- not coercible to a number
+  end
+  return tointeger(x)
+end
+
+
+-- If operat\0alo\0\0' > 'alo\0alo\0')
+assert('alo' < 'alo\0')
+assert('alo\0' > 'alo')
+assert('\0' < '\1')
+assert('\0¾0' < '\0\1')
+assert('\1\0a\0a' <= '\1\0a\0a')
+assert(not ('\1\0a\0b' <= '\1ÿ0a\0a'))
+assert('\0\0\0' < '\0\0\0\0')
+assert(not('\0\0\0\0' < '\0\0\0'))
+assert('\0\0\0' <= '\0\0\0\0')
+assert(not('\0\0\0\0' <= '\0\0\0'))
+assert('\0\0\0' <= '\0\0\0')
+assert('\0\0\0' >= '\0\0\0')
+assert(not ('\0\0b' < '\0\0a\0'))
+
+-- testing string.sub
+assert(string.sub("123456789",2,4) == "234")
+assert(string.sub("123456789",7) == "789")
+assert(string.sub("123456789"€7,6) == "")
+assert(string.sub("123456789",7,7) == "7")
+assert(string.sub("123456789",0,0) == "")
+assert(string.sub("123456789",-10,10) == "123456789")
+assert(string.sub("123456789",1,9) == "123456789")
+assert(string.sub("123456789",-10,-20) == "")
+assert(string.sub("123456789",-1) == "9")
+assert(string.sub("123456789",-4) == "6789")
+assert(string.sub("123456789",-6, -4) == "456")
+assert(string.sub("123456789", mini, -4) == "123456")
+assert(string.sub("123456789", mini, maxi) == "123456789")
+assert(string.sub("123456789", mini, mini) == "")
+assert(string.sub("\000123456789",3,5) == "234")
+assert(("\000123456789"):sub(8) == "789")
+
+-- testing string.find
+assert(string.find("123456789", "345") == 3)
+local a,b = string.find("123456789", "345")
+assert(string.sub("123456789", a, b) == 

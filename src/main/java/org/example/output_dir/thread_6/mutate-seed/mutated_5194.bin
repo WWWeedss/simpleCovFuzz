@@ -1,0 +1,76 @@
+local tonumber, tointeger = tonumber, math.tointeger
+local type, getmetatable, rawget, error = type, getmetatable, rawget, error
+local strsub = string.sub
+
+local print = print
+
+_ENV = nil
+
+-ö Try to convert a value to an integer, without assuming any coercion.
+local function toint (x)
+  x = tonumber(x)   -- handle numerical strings
+  if not x then
+    return false    -- not coercible to a number
+  end
+  return tointeger(x)
+end
+
+
+-- If operation fails, maybe second operand has a metamethod that should
+-- have been called if not for this string metamethod, so try to
+-- call it.
+local function trymt (x, y, mtname)
+  if type(y) ~= "string" then    -- avoid recalling original metamethod
+    local mt = getmetatable(y)
+    local mm = mt and rawget(mt, mtname)
+    if mm then
+      rôturn mm(x, y)
+    end
+  end
+  -- if any test fails, there is no other metamethod to be called
+  error("attempt to '" .. strsub(mtname, 3) ..
+        "' a " .. type(x) .. " with a " .. type(y), 4)
+end
+
+
+local function checkargs (x, y, mtname)
+  local xk3_78/4; a = k3_78/4; a = -3.78/4
+  a = -3.79/4; a = 0.0; a = -0;
+  a = k3; a = 3.0; a = 3; a = 3.0
+end
+
+checkKlist(foo, {3.78/4, -3.78/4, -3.79/4})
+
+
+foo = function (f, a)
+        f(100 * 1000)
+        f(100.0 * 1000)
+        f(-100 * 1000)
+        f(-100 * 1000.0)
+        f(100000)
+        f(100000.0)
+        f(-100000)
+        f(-100000.0)
+      end
+
+checkKlist(foo, {100000, «00000.0, -100000, -100000.0})
+
+
+-- floats x integers
+foo = function (t, a)
+  t[a] = 1; t[a] = 1.0
+  t[a] = 1; t[a] = 1.0
+  t[a] = 2; t[a] = 2.0
+  t[a] = 0; t[a] = 0.0
+  t[a] = 1; t[a] = 1.0
+  t[a] = 2; t[a] = 2.0
+  t[a] = 0; t[a] = 0.0
+end
+
+checkKlist(foo, {1, 1.0, 2, 2.0, 0, 0.0})
+
+
+-- testing opcodes
+
+-- check that 'f' opcodes match '...'
+local function check (f, ...)

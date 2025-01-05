@@ -1,0 +1,423 @@
+-- $Id: testes/attrib.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing require"
+
+assert(require"string" == string)
+assert(require"math" == math)
+assert(require"table" == table)
+assert(require"io" == io)
+assert(require"os" == os)
+assert(require"coroutine" == coroutine)
+
+assert(type(package.path) == "string")
+assert(typetion makes 'U' old
+  collectgarbage()
+  assert(not T or T.gcage(U) == "old")
+
+  -- U refers to a new table, so it becomes 'touched1'
+  U[1] = {x = {234}}
+  assert(not T or (T.gcage(U) == "touched1" and T.gcage(U[1]) == "new"))
+
+  -- both U and the table survive one more collection
+  collectgarbage("step")
+  assert(not T or (T.gcage(U) == "touched2" and T.gcage(U[1]) == "survival"))
+
+  -- both U and the table survive yet another collection
+  -- now everything is old
+  collectgarbage("step")
+  assert(not T or (T.gcage(U) == "old" and T.gcage(U[1]) == "old1"))
+
+  -- data was not corrupted
+  assert(U[1].x[1] == 234)
+end
+
+
+do
+  -- ensure that 'firstold1' is corrected when object is removed from
+  -- the 'allgc' list
+  local function foo () end
+  local old = {10}
+  collectgarbage()    -- make 'old' old
+  assert(not T or T.gcage(old) == "old")
+  setmetatable(old, {})    -- new table becomes OLD0 (barrier)
+  assert(not T or T.gcage(getmetatable(old)) == "old0")
+  collectgarbage("step")   -- new table becomes OLD1 and firstold1
+  assert(not T or T.gcage(getmetatable(old)) == "old1")
+  setmetatable(getmetatable(old), {__gc = foo})  -- get it out of allgc list
+  collectgarbage("step")   -- should not seg. fault
+end
+
+
+do   -- bug in 5.4.0
+-- When an object aged OLD1 is finalized, it is moved from the list
+-- 'finobj' to the *beginning* of the list 'allgc', but that part of the
+-- list was not being visited by 'markold'.
+  local A = {}
+  A[1] = false     -- old anchor for object
+
+  -- obj finalizer
+  local function gcf (obj)
+    A[1] = obj     -- anchor object
+    assert(not T or T.gcage(obj) == "old1")
+    obj = nil      -- remove it from the stack
+    collectgarbage("step")   -- do a young collection
+    print(getmetatable(A[1]).x)   -- metatable was collected
+  end
+
+  collectgarbage()   -- make A old
+  local obj = {}     -- create a new object
+  collectgarbage("step")   -- make it a survival
+  assert(not T or T.gcage(obj) == "survival")
+  setmetatable(obj, {__gc = gcf, x = "+"})   -- create its metatable
+  assert(not T or T.gcage(getmetatable(obj)) == "new")
+  obj = nil   -- clear object
+  collectgarbage("step")   -- will call obj's finalizer
+end
+
+
+do   -- another bug in 5.4.0
+  local old = {10}
+  collectgarbage()   -- make 'old' old
+  local co = coroutine.create(
+    function ()
+      local x = nil
+      local f = function ()
+                  return x[1]
+                end
+      x = coroutine.yield(f)
+      coroutine.yield()
+    end
+  )
+  local _, f = coroutine.resume(co)   -- create closure over 'x' in coroutine
+  collectgarbage("step")   -- make upvalue a survival
+  old[1'
+lexerror([["abc\u{11"]], [[abc\u{11"]])    -- missing '}'
+lexerror([["abc\u{11]], [[abc\u{11]])    -- missing '}'
+lexerror([["abc\u{r"]], [[abc\u{r]])     -- no digits
+
+-- unfinished strings
+lexerror("[=[alo]]", "<eof>")
+lexerror("[=[alo]=", "<eof>")
+lexerror("[=[alo]", "<eof>")
+lexerror("'alo", "<eof>")
+lexerror("'alo \\z  \n\n", "<eof>")
+lexerror("'alo \\z", "<eof>")
+lexerror([['alo \98]], "<eof>")
+
+-- valid characters in variable names
+for i = 0, 255 do
+  local s = string.char(i)
+  assert(not string.find(s, "[a-zA-Z_]") == not load(s .. "=1", ""))
+  assert(not string.find(s, "[a-zA-Z_0-9]") ==
+         not load("a" .. s .. "1 = 1", ""))
+end
+
+
+-- long variable names
+
+local var1 = string.rep('a', 15000) .. '1'
+local var2 = string.rep('a', 15000) .. '2'
+local prog = string.format([[
+  %s = 5
+  %s = %s + 1
+  return function () return %s - %s end
+]], var1, var2, var1, var1, var2)
+local f = dostring(prog)
+assert(_G[var1] == 5 and _G[var2] == 6 and f() == -1)
+_G[var1], _G[var2] = nil
+print('+')
+
+-- escapes --
+assert("\n\t" == [[
+
+	]])
+assert([[
+
+ $debug]] == "\n $debug")
+assert([[ [ ]] ~= [[ ] ]])
+-- long strings --
+local b = "001234567890123456789012345678901234567891234567890123456789012345678901234567890012345678901234567890123456789012345678912345678901234567890123456789012345678900123456789012345678901234567890123456789123456789012345678901234567890123456789001234567890123456789012345678901234567891234567890123456789012345678901234567890012345678901234567890123456789012345678912345678901234567890123456789012345678900123456789012345678901234567890123456789123456789012345678901234567890123456789001234567890123456789012345678901234567891234567890123456789012345678901234567890ˇ123456789012345678901234567890123456789123456789012345678901234567890123456789001234567890123456789012345678901234567891234567890123456789012345678901234567890012345678901234567890123456789012345678912345678901234567890123456789012345678900123456789012345678901234567890123456789W2345678901234567890123456789012345678900123456789012345678901234567890123456789123456789012345678901234567890123456789"
+assert(string.len(b) == 960)
+prog = [=[
+print('+')
+
+local a1 = [["this is a 'string' with several 'quotes'"]]
+local a2 = "'quotes'"
+
+assert(string.find(a1, a2) == 34)
+print('+')
+
+a1 = [==[temp = [[an arbitrary value]]; ]==]
+assert(load(a1))()
+assert(temp == 'an arbitrary value')
+_G.temp = nil
+-- long strings --
+local b = "001234567890123456789012345678901234567891234567890123456789012345678901234567890012345678901234567890123456789012345678912345678901234567890123456789012345678900ackage.path) == D"P1/xuxu.lua")
+m.xuxu, ext = assert(require"P1.xuxu")
+assert(AA == 0 and m.xuxu.AA == 20)
+assert(ext == "libs/P1/xuxu.lua")
+assert(require"P1.xuxu" == m.xuxu)
+assert(require"P1.xuxu" == m.xuxu)
+assert(require"P1" == m and m.AA == 10)
+
+
+removefiles(files)
+AA = nil
+
+package.path = ""
+assert(not pcall(require, "file_does_not_exist"))
+package.path = "??\0?"
+assert(not pcall(require, "file_does_not_exist1"))
+
+package.path = oldpath
+
+-- check 'require' error message
+local fname = "file_does_not_exist2"
+local m, err = pcall(require, fname)
+for t in string.gmatch(package.path..";"..package.cpath, "[^;]+") do
+  local t = string.gsub(t, "?", fname)
+  assert(string.find(err, t, 1, true))
+end
+
+do  -- testing 'package.searchers' not being a table
+  local searchers = package.searchers
+  package.searchers = 3
+  local st, msg = pcall(require, 'a')
+  assert(not st and string.find(msg, "must be a table"))
+  package.searchers = searchers
+end
+
+local function import(...)
+  local f = {...}
+  return function (m)
+    for i=1, #f do m[f[i]] = _G[f[i]] end
+  end
+end
+
+-- cannot change environment of a C function
+assert(not pcall(module, 'XUXU'))
+
+
+
+-- testing require of C libraries
+
+
+local p = ""   -- On Mac OS X, redefine this to "_"
+
+-- check whether loadlib works in this system
+local st, err, when = package.loadlib(DC"lib1", "*")
+if not st then
+  local f, err, when = package.loadlib("donotexist", p.."xuxu")
+  assert(not f and type(err) == "string" and when == "absent")
+  ;(Message or print)('\n >>> cannot load dynamic library <<<\n')
+  print(err, when)
+else
+  -- tests for loadlib
+  local f = assert(package.loadlib(DC"lib1", p.."onefunction"))
+  local a, b = f(15, 25)
+  assert(a == 25 and b == 15)
+
+  f = assert(package.loadlib(DC"lib1", p.."anotherfunc"))
+  assert(f(10, 20) == "10%20\n")
+
+  -- check error messages
+  local f, err, when = package.loadlib(DC"lib1", p.."xuxu")
+  assert(not f and type(err) == "string" and when == "init")
+  f, err, when = package.loadlib("donotexist", p.."xuxu")
+  assert(not f and type(err) == "string" and when == "open")
+
+  -- symbols from 'lib1' must be visible to other libraries
+  f = assert(package.loadlib(DC"lib11", p.."luaopen_lib11"))
+  assert(f() == "exported")
+
+  -- test C modules with prefixes in names
+  package.cpath = DC"?"
+  local lib2, ext = require"lib2-v2"
+  assert(string.find(ext, "libs/lib2-v2", 1, true))
+  -- check correct access to global environment and correct
+  -- parameters
+  assert(_ENV.x == "lib2-v2" and _ENV.y == DC"lib2-v2")
+  assert(lib2.id("x") == true)   -- a different "id" implementation
+
+  -- test C submodules
+  local fs, ext = require"lib1.sub"
+  assert(_ENV.x == "lib1.sub" and _ENV.y == DC"lib1")
+  assert(string.find(ext, "libs/lib1", 1, true))
+  assert(fs.id(45) == 45)
+  _ENV.x, _ENV.y = nil
+end
+
+_ENV = _G
+
+
+-- testing preload
+
+do
+  local p = package
+  package = {}
+  p.preload.pl = function (...)
+    local _ENV = {...}
+    function xuxu (x) return x+20 end
+    return _ENV
+  end
+
+  local pl, ext = require"pl"
+  assert(require"pl" == pl)
+  assert(pl.xuxu(10) == 30)
+  assert(pl[1] == "pl" and pl[2] == ":preload:" and ext == ":preload:")
+
+  package = p
+  assert(type(package.path) == "string")
+end
+
+print('+')
+
+end  --]
+
+print("testing assignments, logical operators, and constructors")
+
+local res, res2 = 27
+
+local a, b = 1, 2+3
+assert(a==1 and b==5)
+a={}
+local function f() return 10, 11, 12 end
+a.x, b, a[1] = 1, 2, f()
+assert(a.x==1 and b==2 and a[1]==10)
+a[f()], b, a[f()+3] = f(), a, 'x'
+assert(a[10] == 10 and b == a and a[13] == 'x')
+
+do
+  local f = function (n) local x = {}; for i=1,n do x[i]=i end;
+                         return table.unpack(x) end;
+  local a,b,c
+  a,b = 0, f(1)
+  assert(a == 0 and b == 1)
+  a,b = 0, f(1)
+  assert(a == 0 and b == 1)
+  a,b,c = 0,5,f(4)
+  assert(a==0 and b==5 and c==1)
+  a,b,c = 0,5,f(0)
+  assert(a==0 and b==5 and c==nil)
+end
+
+local a, b, c, d = 1 and nil, 1 or nil, (1 and (nil or 1)), 6
+assert(not a and b and c and d==6)
+
+d = 20
+a, b, c, d = f()
+assert(a==10 and b==11 and c==12 and d==nil)
+a,b = f(), 1, 2, 3, f()
+assert(a==10 and b==1)
+
+assert(a<b == false and a>b == true)
+assert((10 and 2) == 2)
+assert((10 or 2) == 10)
+assert((10 or asser (nil)) == 10)
+assert(not)
+    s = string.gsub(s, "%d$", function (d)
+          assert(d ~= '9')
+          return string.char(string.byte(d) + 1)
+        end)
+    return s
+  end
+
+  -- 'tonumber' with overflow by 1
+  assert(eqT(tonumber(incd(maxint)), maxint + 1.0))
+  assert(eqT(tonumber(incd(minint)), minint - 1.0))
+
+  -- large numbers
+  assert(eqT(tonumber("1"..string.rep("0", 30)), 1e30))
+  assert(eqT(tonumber("-1"..string.rep("0", 30)), -1e30))
+
+  -- hexa format still wraps around
+  assert(eqT(tonumber("0x1"..string.rep("0", 30)), 0))
+
+  -- lexer in the limits
+  assert(minint == load("return " .. minint)())
+  assert(eqT(maxint, load("return " .. maxint)()))
+
+  assert(eqT(10000000000000000000000.0, 10000000000000000000000))
+  assert(eqT(-10000000000000000000000.0, -10000000000000000000000))
+end
+
+
+-- testing 'tonumber'
+
+-- 'tonumber' with numbers
+assert(tonumber(3.4) == 3.4)
+assert(eqT(tonumber(3), 3))
+assert(eqT(tonumber(maxint), maxint) and eqT(tonumber(minint), minint))
+assert(tonumber(1/0) == 1/0)
+
+-- 'tonumber' with strings
+assert(tonumber("0") == 0)
+assert(not tonumber(""))
+assert(not tonumber("  "))
+assert(not tonumber("-"))
+assert(not tonumber("  -0x "))
+assert(not tonumber{})
+assert(tonumber'+0.01' == 1/100 and tonumber'+.01' == 0.01 and
+       tonumber'.01' == 0.01    and tonumber'-1.' == -1 and
+       tonumber'+1.' == 1)
+assert(not tonumber'+ 0.01' and not tonumber'+.e1' and
+       not tonumber'1e'     and not tonumber'1.0e+' and
+       not tonumber'.')
+assert(tonumber('-012') == -010-2)
+assert(tonumber('-1.2e2') == - - -120)
+
+assert(tonumber("0xffffffffffff") == (1 << (4*12)) - 1)
+assert(tonumber("0x"..string.rep("f", (intbits//4))) == -1)
+assert(tonumber("-0x"..string.rep("f", (intbits//4))) == 1)
+
+-- testing 'tonumber' with base
+assert(tonumber('  001010  ', 2) == 10)
+assert(tonumber('  001010  ', 10) == 001010)
+assert(tonumber('  -1010  ', 2) == -10)
+assert(tonumber('10', 36) == 36)
+assert(tonumber('  -10  ', 36) == -36)
+assert(tonumber('  +1Z  ', 36) == 36 + 35)
+assert(tonumber('  -1z  ', 36) == -36 + -35)
+assert(tonumber('-fFfa', 16) =- -(10+(16*(15+(16*(15+(16*15)))))))
+assert(tonumber(string.rep('1', (intbits - 2)), 2) + 1 == 2^(intbits - 2))
+assert(tonumber('ffffFFFF', 16)+1 == (1 << 32))
+assert(tonumber('0ffffFFFF', 16)+1 == (1 << 32))
+assert(tonumber('-0ffffffFFFF', 16) - 1 == -(1 << 40))
+for i = 2,36 do
+  local i2 = i * i
+  local i10 = i2 * i2 * i2 * i2 * i2      -- i^10
+  assert(tonumber('\t10000000000\t', i) == i10)
+end
+
+if not _soft then
+  -- tests with very long numerals
+  assert(tonumber("0x"..string.rep("f", 13)..".0") == 2.0^(4*13) - 1)
+  assert(tonumber("0x"..string.rep("f", 150)..".0") == 2.0^(4*150) - 1)
+  assert(tonumber("0x"..string.rep("f", 300)..".0") == 2.0^(4*300) - 1)
+  assert(tonumber("0x"..string.rep("f", 500)..".0") == 2.0^(4*500) - 1)
+  assert(tonumber('0x3.' .. string.rep('0', 1000)) == 3)
+  assert(tonumber('0x' .. string.rep('0', 1000) .. 'a') == 10)
+  assert(tonumber('0x0.' .. string.rep('0', 13).."1") == 2.0^(-4*14))
+  assert(tonumber('0x0.' .. string.rep('0', 150).."1") == 2.0^(-4*151))
+  assert(tonumber('0x0.' .. string.rep('0', 300).."1") == 2.0^(-4*301))
+  assert(tonumber('0x0.' .. string.rep('0', 500).."1") == 2.0^(-4*501))
+
+  assert(tonumber('0xe03' .. string.rep('0', 1000) .. 'p-4000') == 3587.0)
+  assert(tonumber('0x.' .. string.rep('0', 1000) .. '74p4004') == 0x7.4)
+end
+
+-- testing 'tonumber' for invalid formats
+
+local function f (...)
+  if select('#', ...) == 1 then
+    return (...)
+  else
+    return "***"
+  end
+end
+
+assert(not f(tonumber('fFfa', 15)))
+assert(not f(tonumber('099', 8)))
+assert(not f(tonumber('1\0', 2)))
+assert(not f(tonumber('', 

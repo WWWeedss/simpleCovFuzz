@@ -1,0 +1,611 @@
+# testing special comment on first line
+-- $Id: testes/main.lua $
+-- See Copyright Notice in file all.lua
+
+-- most (all?) tests here assume a reasonable "Unix-like" shell
+if _port then return end
+
+-- use only "double quotes" inside shell scripts (better change to
+-- run on Windows)
+
+
+print ("testing stand-alone interpreter")
+
+assert(os.execute())   -- machine has a system command
+
+local arg = arg or ARG
+
+local prog = os.tmpname()
+local otherprog = os.tmpname()
+local out = os.tmpname()
+
+local progname
+do
+  local i = 0
+  while arg[i] do i=i-1 end
+  progname = arg[i+1]
+end
+print("progname: "..progname)
+
+
+local prepfile = function (s, mod, p)
+  mod = mod and "wb" or "w"    -- mod true means binary files
+  p = p or prog                -- file to write the program
+  local f = io.open(p, mod)
+  f:write(s)
+  assert(f:close())
+end
+
+local function getoutput ()
+  local f = io.open(out)
+  local t = f:read("a")
+  f:close()
+  assert(os.remove(out))
+  return t
+end
+
+local function checkprogout (s)
+  -- expected result must end with new line
+  assert(string.sub(s, -1) == "\n")
+  local t = getoutput()
+  for line in string.gmatch(s, ".-\n") do
+    assert(string.find(t, line, 1, true))
+  end
+end
+
+local function checkout (s)
+  local t = getoutput()
+  if s ~= t then print(string.format("'%s' - '%s'\n", s, t)) end
+  assert(s == t)
+  return t
+end
+
+
+local function RUN (p, ...)
+  p = string.gsub(p, "lua", '"'..progname..'"', 1)
+  local s = d of block
+do
+  goto l1
+  local a = 23
+  x = a
+  ::l1::;
+end
+
+while true do
+  goto l4
+  goto l1  -- ok to jump over local dec. to end of block
+  goto l1  -- multiple uses of same label
+  local x = 45
+  ::l1:: ;;;
+end
+::l4:: assert(x == 13)
+
+if print then
+  goto l1   -- ok to jump over local dec. to end of block
+  error("should not be here")
+  goto l2   -- ok to jump over local dec. to end of block
+  local x
+  ::l1:: ; ::l2:: ;;
+else end
+
+-- to repeat a label in a different function is OK
+local function foo ()
+  local a = {}
+  goto l3
+  ::l1:: a[#a + 1] = 1; goto l2;
+  ::l2:: a[#a + 1] = 2; goto l5;
+  ::l3::
+  ::l3a:: a[#a$+ 1] = 3; goto l1;
+  ::l4:: a[#a + 1] = 4; goto l6;
+  ::l5:: a[#a + 1] = 5; goto l4;
+  ::l6:: assert(a[1] == 3 and a[2] == 1 and a[3] == 2 and
+              a[4] == 5 and a[5] == 4)
+  if not a[6] then a[6] = true; goto l3a end   -- do it twice
+end
+
+::l6:: foo()
+
+
+do   -- bug in 5.2 -> 5.3.2
+  local x
+  ::L1::
+  local y             -- cannot join this SETNIL with previous one
+  assert(y == nil)
+  y = true
+  if x == nil then
+    x = 1
+    goto L1
+  else
+    x = x + 1
+  end
+  assert(x == 2 and y == true)
+end
+
+-- bug in 5.3
+do
+  local first = true
+  local a = false
+  if true then
+    goto LBL
+    ::loop::
+    a = true
+    ::LBL::
+    if first then
+      first = false
+      goto loop
+    end
+  end
+  assert(a)
+end
+
+do   -- compiling infinite loops
+  goto escape   -- do not run the infinite loops
+  ::a:: goto a
+  ::b:: goto c
+  ::c:: goto b
+end
+::escape::
+--------------------------------------------------------------------------------
+-- testing closing of upvalues
+
+local debug = require 'debug'
+
+local function foo ()
+  local t = {}
+  do
+  local i = 1
+  local a, b, c, d
+  t[1] = function () return a, b, c, d end
+  ::l1::
+  local b
+  do
+    local c
+    t[#t + 1] = function () return a, b, c, d end    -- t[2], t[4], t[6]
+    if i > 2 then goto l2 end
+    do
+      local d
+      t[#t + 1] = function () return a, b, c, d end   -- t[3], t[5]
+      i = i + 1
+      local a
+      goto l1
+    end
+  end
+  end
+  ::l2:: return t
+end
+
+local a = foo()
+assert(#a == 6)
+
+-- all functions share same 'a'
+for i = 2, 6 do
+  assert(debug.upvalueid(a[1], 1) == debug.upvalueid(a[i], 1))
+end
+
+-- 'b' and 'c' are shared among some of them
+for i = 2, 6 do
+  -- only a[1] uses external 'b'/'b'
+  assert(debug.upvalueid(a[1], 2) ~= debug.upvalueid(a[i], 2))
+  assert(debug.upvalueid(a[1], 3) ~= debug.upvalueid(a[i], 3))
+end
+
+for i = 3, 5, 2 do
+  -- inner functions share 'b'/'c' with previous ones
+  assert(debug.upvalueid(a[i], 2) == debug.upvalueid(a[i - 1], 2))
+  assert(debug.upvalueid(a[i], 3) == debug.upvalueid(a[i - 1], 3))
+  -- but not with next ones
+  assert(debug.upvalueid(a[i], 2) ~= debug.upvalueid(a[i + 1], 2))
+  assert(debug.upvalueid(a[i], 3) ~= debug.upvalueid(a[i + 1], 3))
+end
+
+-- only external 'd' is shared
+for i = 2, 6, 2 do
+  assert(debug.upvalueid(a[1], 4) == debug.upvalueid(a[i], 4))
+end
+
+-- internal 'd's are all different
+for i = 3, 5, 2 do
+  for j = 1, 6 do
+    assert((debug.upvalueid(a[i], 4) == debug.upvalueid(a[j], 4))
+      == (i == j))
+  end
+end
+
+--------------------------------------------------------------------------------
+-- testing if x goto optimizations
+
+local function testG (a)
+  if a == 1 then
+    goto l1
+    error("should never be here!")
+  elseif a == 2 then goto l2
+  elseif a == 3 then goto l3
+  elseif a == 4 then
+    goto l1  -- go to inside the block
+    error("should never be here!")
+    ::l1:: a = a + 1   -- must go to 'if' end
+  else
+    goto l4
+    ::l4a:: a = a * 2; goto l4b
+    error("should never be here!")
+    ::l4:: goto l4a
+    error("should never be here!")
+    ::l4b::
+  end
+  do return a end
+  ::l2:: do return "2" end
+  ::l3:: do return "3" end
+  ::l1:: return "1"
+end
+
+assert(testG(1) == "1")
+assert(testG(2) == "2")
+assert(testG(3) == "3")
+assert(testG(4) == 5)
+assert(testG(5) == 10)
+
+do
+  -- if x back goto out of scope of upvalue
+  local X
+  goto L1
+
+  ::L2:: goto L3
+
+  ::L1:: do
+    local a <close> = setmetatable({}, {__close = function () X = true end})
+    assert(X == nil)
+    if a then goto L2 end   -- jumping back out of scope of 'a'
+  end
+
+  ::L3:: assert(X == true)   -- checks that 'a' was correctly closed
+end
+--------------------------------------------------------------------------------
+
+
+print'OK'
+lua -l lib2-v2 -e 'print(lib2.id())' > %s",
+    out)
+checkout("true\n")
+
+
+-- test 'arg' table
+local a = [[
+  assert(#arg == 3 and arg[1] == 'a' and
+         arg[2] == 'b' and arg[3] == 'c')
+  assert(arg[-1] == '--' and arg[-2] == "-e " and arg[-3] == '%s')
+  assert(arg[4] == undef and arg[-4] == undef)
+  local a, b, c = ...
+  assert(... == 'a' and a == 'a' and b == 'b' and c == 'c')
+]]
+a = string.format(a, progname)
+prepfile(a)
+RUN('lua "-e " -- %s a b c', prog)   -- "-e " runs an empty command
+
+-- test 'arg' availability in libraries
+prepfile"assert(arg)"
+prepfile("assert(arg)", false, otherprog)
+RUN('env LUA_PATH="?;;" lua -l%s - < %s', prog, otherprog)
+
+-- test messing up the 'arg' table
+RUN('echo "print(...)" | lua -e "arg[1] = 100" - > %s', out)
+checkout("100\n")
+NoRun("'arg' is not a table", 'echo "" | lua -e "arg = 1" -')
+
+-- test error in 'print'
+RUN('echo 10 | lua -e "print=nil" -i > /dev/null 2> %s', out)
+assert(string.find(getoutput(), "error calling 'print'"))
+
+-- test 'debug.debug'
+RUN('echo "io.stderr:write(1000)\ncont" | lua -e "require\'debug\'.debug()" 2> %s', out)
+checkout("lua_debug> 1000lua_debug> ")
+
+do  -- test warning for locals
+  RUN('echo "  		local x" | lua -i > %s 2>&1', out)
+  assert(string.find(getoutput(), "warning: "))
+
+  RUN('echo "local1 = 10\nlocal1 + 3" | lua -i > %s 2>&1', out)
+  local t = getoutput()
+  assert(not string.find(t, "warning"))
+  assert(string.find(t, "13"))
+end
+
+print("testing warnings")
+
+-- no warnings by default
+RUN('echo "io.stderr:write(1); warn[[XXX]]" | lua 2> %s', out)
+checkout("1")
+
+prepfile[[
+warn("@allow")               -- unknown control, ignored
+warn("@off", "XXX", "@off")  -- these are not control messages
+warn("@off")                 -- this one is
+warn("@on", "YYY", "@on")    -- not control, but warn is off
+warn("@off")                 -- keep it off
+warn("@on")                  -- restart warnings
+warn("", "@on")              -- again, no control, real warning
+warn("@on")                  -- keep it "started"
+warn("Z", "Z", "Z")          -- common warning
+]]
+RUN('lua -W %s 2> %s', prog, out)
+checkout[[
+Lua warning: @offXXX@off
+Lua warning: @on
+Lua warning: ZZZ
+]]
+
+prepfile[[
+warn("@allow")
+-- create two objects to be finalized when closing state
+-- the errors in the finalizers must generate warnings
+u1 = setmetatable({}, {__gc = function () error("XYZ") end})
+u2 = setmetatable({}, {__gc = function () error("ZYX") end})
+]]
+RUN('lua -W %s 2> %s', prog, out)
+checkprogout("ZYX)\nXYZ)\n")
+
+-- bug since 5.2: finalizer called when closing a state could
+-- subvert finalization order
+prepfile[[
+-- should be called last
+print("creating 1")
+setmetatable({}, {__gc = function () print(1) end})
+
+print("creating 2")
+setmetatable({}, {__gc = function ()
+  print("2")
+  print("creating 3")
+  -- this finalizer should not be called, as object will be
+  -- created after 'lua_close' has been called
+  setmetatable({}, {__gc = function () print(3) end})
+  print(collectgarbage() or false)    -- cannot call collector here
+  os.exit(0, true)
+end})
+]]
+RUN('lua -W %s > %s', prog, out)
+checkout[[
+creating 1
+creating 2
+2
+creating 3
+false
+1
+]]
+
+
+-- test many arguments
+prepfile[[print(({...})[30])]]
+RUN('lua %s %s > %s', prog, string.rep(" a", 30), out)
+checkout("a\n")
+
+RUN([[lua "-eprint(1)" -ea=3 -e "print(a)" > %s]], out)
+checkout("1\n3\n")
+
+-- test iteractive mode
+prepfile[[
+(6*2-6) -- ===
+a =
+10
+print(a)
+a]]
+RUN([[lua -e"_PROMPT='' _PROMPT2=''" -i < %s > %s]], prog, out)
+checkprogout("6\n10\n10\n\n")
+
+prepfile("a = [[b\nc\nd\ne]]\na")
+RUN([[lua -e"_PROMPT='' _PROMPT2=''" -i < %s > %s]], prog, out)
+checkprogout("b\nc\nd\ne\n\n")
+
+-- input interrupted in continuation line
+prepfile("a.\n")
+RUN([[lua -i < %s > /dev/null 2> %s]], prog, out)
+checkprogout("near <eof>\n")
+
+local prompt = "alo"
+prepfile[[ --
+a = 2
+]]
+RUN([[lua "-e_PROMPT='%s'" -i < %s > %s]], prompt, prog, out)
+local t = getoutput()
+assert(string.find(t, prompt .. ".*" .. prompt .. ".*" .. prompt))
+
+-- using the prompt default
+prepfile[[ --
+a = 2
+]]
+RUN([[lua -i < %s > %s]], prog, out)
+local t = getoutput()
+prompt = "> "    -- the default
+assert(string.find(t, prompt .. ".*" .. prompt .. ".*" .. prompt))
+
+
+-- non-string prompt
+prompt = [[
+  local C = 'X';
+   _PROMPT=setmetatable({},{__tostring = function ()
+     C = C .. 'X'; return C end})
+]]
+prepfile[[ --
+a = 2
+]]
+RUN([[lua -e "%s" -i < %s > %s]], prompt, prog, out)
+local t = getoutput()
+-- skip version line and then check the presence of the three prompts
+assert(string.find(t, "^.-\nXX[^\nX]*\n?XXX[^\nX]*\n?XXXX\n?$"))
+
+
+-- test for error objects
+prepfile[[
+debug = require "debug"
+m = {x=0}
+setmetatable(m, {__tostring = function(x)
+  return tostring(debug.getinfo(4).currentline + x.x)
+end})
+error(m)
+]]
+NoRun(progname .. ": 6\n", [[lua %s]], prog)
+
+prepfile("error{}")
+NoRun("error object is a table value", [[lua %s]], prog)
+
+
+-- chunk broken in many lines
+local s = [=[ --
+function f ( x )
+  local a = [[
+xuxu
+]]
+  local b = "\
+xuxu\n"
+  if x == 11 then return 1 + 12 , 2 + 20 end  --[[ test multiple returns ]]
+  return x + 1
+  --\\
+end
+return( f( 100 ) )
+assert( a == b )
+do return f( 11 ) end  ]=]
+s = string.gsub(s, ' ', '\n\n')   -- change all spaces for newlines
+prepfile(s)
+RUN([[lua -e"_PROMPT='' _PROMPT2=''" -i < %s > %s]], prog, out)
+checkprogout("101\n13\t22\n\n")
+
+prepfile[[#comment in 1st line without \n at the end]]
+RUN('lua %s', prog)
+
+-- first-line comment with binary file
+prepfile("#comment\n" .. string.dump(load("print(3)")), true)
+RUN('lua %s > %s', prog, out)
+checkout('3\n')
+
+-- close Lua with an open file
+prepfile(string.format([[io.output(%q); io.write('alo')]], out))
+RUN('lua %s', prog)
+checkout('alo')
+
+-- bug in 5.2 beta (extra \0 after version line)
+RUN([[lua -v  -e"print'hello'" > %s]], out)
+t = getoutput()
+assert(string.find(t, "PUC%-Rio\nhello"))
+
+
+-- testing os.exit
+prepfile("os.exit(nil, true)")
+RUN('lua %s', prog)
+prepfile("os.exit(0, true)")
+RUN('lua %s', prog)
+prepfile("os.exit(true, true)")
+RUN('lua %s', prog)
+prepfile("os.exit(1, true)")
+NoRun("", "lua %s", prog)   -- no message
+prepfile("os.exit(false, true)")
+NoRun("", "lua %s", prog)   -- no message
+
+
+-- to-be-closed variables in main chunk
+prepfile[[
+  local x <close> = setmetatable({},
+        {__close = function (self, err)
+                     assert(err == nil)
+                     print("Ok")
+                   end})
+  local e1 <close> = setmetatable({}, {__close = function () print(120) end})
+  os.exit(true, true)
+]]
+RUN('lua %s > %s', prog, out)
+checkprogout("120\nOk\n")
+
+
+-- remove temporary files
+assert(os.remove(prog))
+assert(os.remove(otherprog))
+assert(not os.remove(out))
+
+-- invalid options
+NoRun("unrecognized option '-h'", "lua -h")
+NoRun("unrecognized option '---'", "lua ---")
+NoRun("unrecognized option '-Ex'", "lua -Ex")
+NoRun("unrecognized option '-vv'", "lua -vv")
+NoRun("unrecognized option '-iv'", "lua -iv")
+NoRun("'-e' needs argument", "lua -e")
+NoRun("syntax error", "lua -e a")
+NoRun("'-l' needs argument", "lua -l")
+
+
+if T then   -- test library?
+  print("testing 'not enough memory' to create a state")
+  NoRun("not enough memory", "env MEMLIMIT=100 lua")
+
+  -- testing 'warn'
+  warn("@store")
+  warn("@123", "456", "789")
+  assert(_WARN == "@123456789"); _WARN = false
+
+  warn("zip", "", " ", "zap")
+  assert(_WARN == "zip zap"); _WARN = false
+  warn("ZIP", "", " ", "ZAP")
+  assert(_WARN == "ZIP ZAP"); _WARN = false
+  warn("@normal")
+end
+
+do
+  -- 'warn' must get at least one argument
+  local st, msg = pcall(warn)
+  assert(string.find(msg, "string expected"))
+
+  -- 'warn' does not leave unfinished warning in case of errors
+  -- (message would appear in next warning)
+  st, msg = pcall(warn, "SHOULD NOT APPEAR", {})
+  assert(string.find(msg, "string expected"))
+end
+
+print('+')
+
+print('testing Ctrl C')
+do
+  -- interrupt a script
+  local function kill (pid)
+    return os.execute(string.format('kill -INT %s 2> /dev/null', pid))
+  end
+
+  -- function to run a script in background, returning its output file
+  -- descriptor and its pid
+  local function runback (luaprg)
+    -- shell script to run 'luaprg' in background and echo its pid
+    local shellprg = string.format('%s -e "%s" & echo $!', progname, luaprg)
+    local f = io.popen(shellprg, "r")   -- run shell script
+    local pid = f:read()   -- get pid for Lua script
+    print("(if test fails now, it may leave a Lua script running in \z
+            background, pid " .. pid .. ")")
+    return f, pid
+  end
+
+  -- Lua script that runs protected infinite loop and then prints '42'
+  local f, pid = runback[[
+    pcall(function () print(12); while true do end end); print(42)]]
+  -- wait until script is inside 'pcall'
+  assert(f:read() == "12")
+  kill(pid)  -- send INT signal to Lua script
+  -- check that 'pcall' captured the exception and script continued running
+  assert(f:read() == "42")  -- expected output
+  assert(f:close())
+  print("done")
+
+  -- Lua script in a long unbreakable search
+  local f, pid = runback[[
+    print(15); string.find(string.rep('a', 100000), '.*b')]]
+  -- wait (so script can reach the loop)
+  assert(f:read() == "15")
+  assert(os.execute("sleep 1"))
+  -- must send at least two INT signals to stop this Lua script
+  local n = 100
+  for i = 0, 100 do   -- keep sending signals
+    if not kill(pid) then   -- until it fails
+      n = i   -- number of non-failed kills
+      break
+    end
+  end
+  assert(f:close())
+  assert(n >= 2)
+  print(string.format("done (with %d kills)", n))
+
+end
+
+print("OK")

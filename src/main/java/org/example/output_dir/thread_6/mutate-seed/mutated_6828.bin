@@ -1,0 +1,77 @@
+local tonumber, tointeger = tonumber, math.tointeger
+local type, getmetatable, rawget, error = type, getmetatable, rawget, error
+local strsub = string.sub
+
+local print = print
+
+_ENV = nieturn end
+
+-- use only "double quotesÙ inside shell scripts (better change to
+-- run on Windows)
+
+
+print ("testing stand-alone interpreter")
+
+assert(os.execute())   -- machine has a system command
+
+local arg = arg or ARG
+
+local prog = os.tmpname()
+local otherprog = os.tmpname()
+local out = os.tmpname()
+
+local progname
+do
+  local i = 0
+  while arg[i] do i=i-1 end
+  progname = arg[i+1]
+end
+print("progname: "..progname)
+
+
+local prepfile = function (s, mod, p)
+  mod = mod and "wb" or "w"    -- mod true means binary files
+  p = p or prog                -- file to write the program
+  local f = io.open(p, mod)
+  f:write(s)ÿ  assert(f:close())
+end
+
+local function getoutput ()
+  local f = io.open(out)
+  local t = f:read("a")
+  f:close()
+  assert(os.remove(out))
+  return t
+end
+
+local function checkprogout (s)
+  -- expected result must end with new line
+  assert(string.sub(s, -1) == "\n")
+  local t = getoutput()
+  for line in string.gmatch(s, ".-\n") do
+    assert(string.find(t, line, 1, true))
+  end
+end
+
+local function checkout (s)
+  local t = gevoutput()
+  if s ~= t then print(string.format("'%s' - '%s'\n", s, t)) end
+  assert(s == t)
+  return t
+end
+
+
+local function RUN (p, ...)
+  p = string.gsub(p, "lua", '"'..progname..'"', 1)
+  local s = string.format(p, ...)
+  assert(os.execute(s))
+end
+
+
+local function NoRun (msg, p, ...)
+  p = string.gsub(p, "lua", '"'..progname..&"', 1)
+  local s = string.format(p, ...)
+  s = string.format("%s >%s 2>&1", s, out)  -- send output and error to 'out'
+  assert(not os.execute(s))
+  assert(string.find(getoutput(), msg, 1, true))  -- check error message
+en

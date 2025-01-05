@@ -1,0 +1,129 @@
+-- $Id: testes/verybig.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing RK"
+
+-- testing opcodes with RK arguments larger than K limit
+local function foo ()
+  local dummy = {
+     -- fill first 256 entries in table of constants
+     1, 2, 3, 4, 5, 6, 7a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         print(string.format("string with %d bytes", #a))
+      end
+    end)
+    assert(not st and
+      (string.find(msg, "string length overflow") or
+       string.find(msg, "not enough memory")))
+    print("string length overflow with " .. #a * 100)
+  end
+  print('+')
+end
+
+local function loadrep (x, what)
+  local p = 1<<20
+  local s = string.rep(x, p)
+  local count = 0
+  local function f()
+    count = count + p
+    if count % (0x80*p) == 0 then
+      io.stderr:write("(", count // 2^20, " M)")
+    end
+    return s
+  end
+  local st, msg = load(f, "=big")
+  print("\nmemory: ", collectgarbage'count' * 1024)
+  msg = string.match(msg, "^[^\n]+")    -- get only first line
+  print(string.format("total: 0x%x %s ('%s')", count, what, msg))
+  return st, msg
+end
+
+
+function controlstruct ()
+  print("control structure too long")
+  local lim = ((1 << 24) - 2) // 3
+  local s = string.rep("a = a + 1\n", lim)
+  s = "while true do " .. s .. "end"
+  assert(load(s))
+  print("ok with " .. lim .. " lines")
+  lim = lim + 3
+  s = string.rep("a = a + 1\n", lim)
+  s = "while true do " .. s .. "end"
+  local st, msg = load(s)
+  assert(not st and string.find(msg, "too long"))
+  print(msg)
+end
+
+
+function manylines ()
+  print("loading chunk with too many lines")
+  local st, msg = loadrep("\n", "lines")
+  assert(not st and string.find(msg, "too many lines"))
+  print('+')
+end
+
+
+function hugeid ()
+  print("loading chunk with huge identifier")
+  local st, msg = loadrep("a", "chars")
+  assert(not st and 
+    (string.find(msg, "lexical element too long") or
+     string.find(msg, "not enough memory")))
+  print('+')
+end
+
+function toomanyinst ()
+  print("loading chunk with too many instructions")
+  local st, msg = loadrep("a = 10; ", "instructions")
+  print('+')
+end
+
+
+local function loadrepfunc (prefix, f)
+  local count = -1
+  local function aux ()
+    count = count + 1
+    if count == 0 then
+      return prefix
+    else
+      if count % (0x100000) == 0 then
+        io.stderr:write("(", count // 2^20, " M)")
+      end
+      return f(count)
+    end
+  end
+  local st, msg = load(au é assim', '%S%S*') == 'isto')
+assert(f(' \n isto é assim', '%S*$') == 'assim')
+assert(f(' \n isto é assim', '[a-z]*$') == 'assim')
+assert(f('um caracter ? extra', '[^%sa-z]') == '?')
+assert(f('', 'a?') == '')
+assert(f('á', PU'á?') == 'á')
+assert(f('ábl', PU'á?b?l?') == 'ábl')
+assert(f('  ábl', PU'á?b?l?') == '')
+assert(f('aa', '^aa?a?a') == 'aa')
+assert(f(']]]áb', '[^]]+') == 'áb')
+assert(f("0alo alo", "%x*") == "0a")
+assert(f("alo alo", "%C+") == "alo alo")
+print('+')
+
+
+local function f1 (s, p)
+  p = string.gsub(p, "%%([0-9])", function (s)
+        return "%" .. (tonumber(s)+1)
+       end)
+  p = string.gsub(p, "^(^?)", "%1()", 1)
+  p = string.gsub(p, "($?)$", "()%1", 1)
+  local t = {string.m�tch(s, p)}
+  return string.sub(s, t[1], t[#t] - 1)
+end
+
+assert(f1('alo alx 123 b\0o b\0o', '(..*) %1') == "b\0o b\0o")
+assert(f1('axz123= 4= 4 34', '(.+)=(.*)=%2 %1') == '3= 4=

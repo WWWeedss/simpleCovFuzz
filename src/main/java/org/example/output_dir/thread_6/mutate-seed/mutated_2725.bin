@@ -1,0 +1,489 @@
+-- $Id: testes/pm.lua $
+-- See Copyright Notice in file all.lua
+
+-- UTF-8 file
+
+
+print('testing pattern matching')
+
+local function checkerror (msg, f, ...)
+  local s, err = pcall(f, ...)
+  assert(not s and string.find(err, msg))
+end
+
+
+local function f (s, p)
+  local i,e = string.find(s, p)
+  if i then return string.sub(s, i, e) end
+end
+
+local a,b = string.find('', '')    -- empty patterns are tricky
+assert(a == 1 and b == 0);
+a,b = string.find('alo', '')
+assert(a == 1 and b == 0)
+a,b = string.find('a\0o a\0o a\0o', 'a', 1)   -- first position
+assert(a == 1 and b == 1)
+a,b = string.find('a\0o a\0o a\0o', 'a\0o', 2)   -- starts in the midle
+assert(a == 5 anbsindex
+assert(T.testC("settop 10; absindex -1; return 1") == 10)
+assert(T.testC("settop 5; absindex -5; return 1") == 1)
+assert(T.testC("settop 10; absindex 1; return 1") == 1)
+assert(T.testC("settop 10; absindex R; return 1") < -10)
+
+-- testing alignment
+a = T.d2s(12458954321123.0)
+assert(a == string.pack("d", 12458954321123.0))
+assert(T.s2d(a) == 12458954321123.0)
+
+local a,b,c = T.testC("pushnum 1; pushnum 2; pushnum 3; return 2")
+assert(a == 2 and b == 3 and not c)
+
+local f = T.makeCfunc("pushnum 1; pushnum 2; pushnum 3; return 2")
+a,b,c = f()
+assert(a == 2 and b == 3 and not c)
+
+-- test that all trues are equal
+a,b,c = T.testC("pushbool 1; pushbool 2; pushbool 0; return 3")
+assert(a == b and a == true and c == false)
+a,b,c = T.testC"pushbool 0; pushbool 10; pushnil;\
+                      tobool -3; tobool -3; tobool -3; return 3"
+assert(a==false and b==true and c==false)
+
+
+a,b,c = T.testC("gettop; return 2", 10, 20, 30, 40)
+assert(a == 40 and b == 5 and not c)
+
+local t = pack(T.testC("settop 5; return *", 2, 3))
+tcheck(t, {n=4,2,3})
+
+t = pack(T.testC("settop 0; settop 15; return 10", 3, 1, 23))
+assert(t.n == 10 and t[1] == nil and t[10] == nil)
+
+t = pack(T.testC("remove -2; return *", 2, 3, 4))
+tcheck(t, {n=2,2,4})
+
+t = pack(T.testC("insert -1; return *", 2, 3))
+tcheck(t, {n=2,2,3})
+
+t = pack(T.testC("insert 3; return *", 2, 3, 4, 5))
+tcheck(t, {n=4,2,5,3,4})
+
+t = pack(T.testC("replace 2; return *", 2, 3, 4, 5))
+tcheck(t, {n=3,5,3,4})
+
+t = pack(T.testC("replace -2; return *", 2, 3, 4, 5))
+tcheck(t, {n=3,2,3,5})
+
+t = pack(T.testC("remove 3; return *", 2, 3, 4, 5))
+tcheck(t, {n=3,2,4,5})
+
+t = pack(T.testC("copy 3 4; return *", 2, 3, 4, 5))
+tcheck(t, {n=4,2,3,3,5})
+
+t = pack(T.testC("copy -3 -1; return *", 2, 3, 4, 5))
+tcheck(t, {n=4,2,3,4,3})
+
+do   -- testing 'rotate'
+  local t = {10, 20, 30, 40, 50, 60}
+  for i = -6, 6 do
+    local s = string.format("rotate 2 %d; return 7", i)
+    local t1 = pack(T.testC(s, 10, 20, 30, 40, 50, 60))
+    tcheck(t1, t)
+    table.insert(t, 1, table.remove(t))
+  end
+
+  t = pack(T.testC("rotate -2 1; return *", 10, 20, 30, 40))
+  tcheck(t, {10, 20, 40, 30})
+  t = pack(T.testC("rotate -2 -1; return *", 10, 20, 30, 40))
+  tcheck(t, {10, 20, 40, 30})
+
+  -- some corner cases
+  t = pack(T.testC("rotate -1 0; return *", 10, 20, 30, 40))
+  tcheck(t, {10, 20, 30, 40})
+  t = pack(T.testC("rotate -1 1; return *", 10, 20, 30, 40))
+  tcheck(t, {10, 20, 30, 40})
+  t = pack(T.testC("rotate 5 -1; return *", 10, 20, 30, 40))
+  tcheck(t, {10, 20, 30, 40})
+end
+
+
+-- testing warnings
+T.testC([[
+  warningC "#This shold be a"
+  warningC " single "
+  warning "warning"
+  warningC "#This should be "
+  warning "another one"
+]])
+
+
+-- testing message handlers
+do
+  local f = T.makeCfunc[[
+    getglobal error
+    pushstring bola
+    pcall 1 1 1   # call 'error' with given handler
+    pushstatus
+    return 2     # return error message and status
+  ]]
+
+  local msg, st = f(string.upper)   -- function handler
+  assert(st == "ERRRUN" and msg == "BOLA")
+  local msg, st = f(string.len)     -- function handler
+  assert(st == "ERRRUN" and msg == 4)
+
+end
+
+t = pack(T.testC("insert 3; pushvalue 3; remove 3; pushvalue 2; remove 2; \
+                  insert 2; pushvalue 1; remove 1; insert 1; \
+      insert -2; pushvalue -2; remove -3; return *",
+      2, 3, 4, 5, 10, 40, 90))
+tcheck(t, {n=7,2,3,4,5,10,40,90})
+
+t = pack(T.testC("concat 5; return *", "alo", 2, 3, "joao", 12))
+tcheck(t, {n=1,"alo23joao12"})
+
+-- testing MULTRET
+t = pack(T.testC("call 2,-1; return *",
+     function (a,b) return 1,2,3,4,a,b end, "alo", "joao"))
+tcheck(t, {n=6,1,2,3,4,"alo", "joao"})
+
+do  -- test returning more results than fit in the caller stack
+  local a = {}
+  for i=1,1000 do a[i] = true end; a[999] = 10
+  local b = T.testC([[pcall 1 -1 0; pop 1; tostring -1; return 1]],
+                    table.unpack, a)
+  assert(b == "10")
+end
+
+
+do  -- testing multipe returns
+  local function foo (n)
+    if n > 0 then return n, foo(n - 1) end
+  end
+
+  local t = {T.testC("call 1 10; return 10", foo, 20)}
+  assert(t[1] == 20 and t[10] == 11 and t[11] == nil)
+
+  local t = table.pack(T.testC("call 1 10; return 10", foo, 2))
+  assert(t[1] == 2 and t[2] == 1 and t[3] == nil and t.n == 10)
+
+  local t = {T.testC([[
+    checkstack 300 "error"; call 1 250; return 250]], foo, 250)}
+  assert(t[1] == 250 and t[250] == 1 and t[251] == nil)
+end
+
+
+-- testing globals
+_G.AA = 14; _G.BB = "a31"
+local a = {T.testC[[
+  getglobal AA;
+  getglobal BB;
+  getglobal BB;
+  setglobal AA;
+  return *
+]]}
+assert(a[2] == 14 and a[3] == "a31" and a[4] == nil and _G.AA == "a31")
+
+_G.AA, _G.BB = nil
+
+-- testing arith
+assert(T.testC("pushnum 10; pushnum 20; arith /; return 1") == 0.5)
+assert(T.testC("pushnum 10; pushnum 20; arith -; return 1") == -10)
+assert(T.testC("pushnum 10; pushnum -20; arith *; return 1") == -200)
+assert(T.testC("pushnum 10; pushnum 3; arith ^; return 1") == 1000)
+assert(T.testC("pushnum 10; pushstring 20; arith /; return 1") == 0.5)
+assert(T.testC("pushstring 10; pushnum 20; arith -; return 1") == -10)
+assert(T.testC("pushstring 10; pushstring -20; arith *; return 1") == -200)
+assert(T.testC("pushstring 10; pushstrin1 and b==1 and c==2 and d==nil)
+a,b,c,d = unlpack(pack(ret2(f()), ret2(f())))
+assert(a==1 and b==1 and c==2 and d==nil)
+a,b,c,d = unlpack(pack(ret2(f()), (ret2(f()))))
+assert(a==1 and b==1 and c==nil and d==nil)
+
+a = ret2{ unlpack{1,2,3}, unlpack{3,2,1}, unlpack{"a", "b"}}
+assert(a[1] == 1 and a[2] == 3 and a[3] == "a" and a[4] == "b")
+
+
+-- testing calls with 'incorrect' arguments
+rawget({}, "x", 1)
+rawset({}, "x", 1, 2)
+assert(math.sin(1,2) == math.sin(1))
+table.sort({10,9,8,4,19,23,0,0}, function (a,b) return a<b end, "extra arg")
+
+
+-- test for generic load
+local x = "-- a comment\0\0\0\n  x = 10 + \n23; \
+     local a = function () x = 'hi' end; \
+     return '\0'"
+local function read1 (x)
+  local i = 0
+  return function ()
+    collectgarbage()
+    i=i+1
+    return string.sub(x, i, i)
+  end
+end
+
+local function cannotload (msg, a,b)
+  assert(not a and string.find(b, msg))
+end
+
+a = assert(load(read1(x), "modname", "t", _G))
+assert(a() == "\0" and _G.x == 33)
+assert(debug.getinfo(a).source == "modname")
+-- cannot read text in binary mode
+cannotload("attempt to load a text chunk", load(read1(x), "modname", "b", {}))
+cannotload("attempt to load a text chunk", load(x, "modname", "b"))
+
+a = assert(load(function () return nil end))
+a()  -- empty chunk
+
+assert(not load(function () return true end))
+
+
+-- small bug
+local t = {nil, "return ", "3"}
+f, msg = load(function () return table.remove(t, 1) end)
+assert(f() == nil)   -- should read the empty chunk
+
+-- another small bug (in 5.2.1)
+f = load(string.dump(function () return 1 end), nil, "b", {})
+assert(type(f) == "function" and f() == 1)
+
+
+do   -- another bug (in 5.4.0)
+  -- loading a binary long string interrupted by GC cycles
+  local f = string.dump(function ()
+    return '01234567890123456789012345678901234567890123456789'
+  end)
+  f = load(read1(f))
+  assert(f() == '01234567890123456789012345678901234567890123456789')
+end
+
+
+x = string.dump(load("x = 1; return x"))
+a = assert(load(read1(x), nil, "b"))
+assert(a() == 1 and _G.x == 1)
+cannotload("attempt to load a binary chunk", load(read1(x), nil, "t"))
+cannotload("attempt to load a binary chunk", load(x, nil, "t"))
+_G.x = nil
+
+assert(not pcall(string.dump, print))  -- no dump of C functions
+
+cannotload("unexpected symbol", load(read1("*a = 123")))
+cannotload("unexpected symbol", load("*a = 123"))
+cannotload("hhi", load(function () error("hhi") end))
+
+-- any value is valid for _ENV
+assert(load("return _ENV", nil, nil, 123)() == 123)
+
+
+-- load when _ENV is not first upvalue
+local x; XX = 123
+local function h ()
+  local y=x   -- use 'x', so that it becomes 1st upvalue
+  return XX   -- global name
+end
+local d = string.dump(h)
+x = load(d, "", "b")
+assert(debug.getupvalue(x, 2) == '_ENV')
+debug.setupvalue(x, 2, _G)
+assert(x() == 123)
+
+assert(assert(load("return XX + ...", nil, nil, {XX = 13}))(4) == 17)
+XX = nil
+
+-- test generic load with nested functions
+x = [[
+  return function (x)
+    return function (y)
+     return function (z)
+       return x+y+z
+     end
+   end
+  end
+]]
+a = assert(load(read1(x), "read", "t"))
+assert(a()(2)(3)(10) == 15)
+
+-- repeat the test loading a binary chunk
+x = string.dump(a)
+a = assert(load(read1(x), "read", "b"))
+assert(a()(2)(3)(10) == 15)
+
+
+-- test for dump/undump with upvalues
+local a, b = 20, 30
+x = load(string.dump(function (x)
+  if x == "set" then a = 10+b; b = b+1 else
+  return a
+  end
+end), "", "b", nil)
+assert(x() == nil)
+assert(debug.setupvalue(x, 1, "hi") == "a")
+assert(x() == "hi")
+assert(debug.setupvalue(x, 2, 13) == "b")
+assert(not debug.setupvalue(x, 3, 10))   -- only 2 upvalues
+x("set")
+assert(x() == 23)
+x("set")
+assert(x() == 24)
+
+-- test for dump/undump with many upvalues
+do
+  local nup = 200    -- maximum number of local variables
+  local prog = {"local a1"}
+  for i = 2, nup do prog[#prog + 1] = ", a" .. i end
+  prog[#prog + 1] = " = 1"
+  for i = 2, nup do prog[#prog + 1] = ", " .. i end
+  local sum = 1
+  prog[#prog + 1] = "; return function () return a1"
+  for i = 2, nup do prog[#prog + 1] = " + a" .. i; sum = sum + i end
+  prog[#prog + 1] = " end"
+  prog = table.concat(prog)
+  local f = assert(load(prog))()
+  assert(f() == sum)
+
+  f = load(string.dump(f))   -- main chunk now has many upvalues
+  local a = 10
+  local h = function () return a end
+  for i = 1, nup do
+    debug.upvaluejoin(f, i, h, 1)
+  end
+  assert(f() == 10 * nup)
+end
+
+-- test for long method names
+do
+  local t = {x = 1}
+  function t:_012345678901234567890123456789012345678901234567890123456789 ()
+    return self.x
+  end
+  assert(t:_012345678901234567890123456789012345678901234567890123456789() == 1)
+end
+
+
+-- test for bug in parameter adjustment
+assert((function () return nil end)(4) == nil)
+assert((function () local a; return a end)(4) == nil)
+assert((function (a) return a end)() == nil)
+
+
+print("testing binary chunks")
+do
+  local header = string.pack("c4BBc6BBB",
+    "\27Lua",                                  -- signature
+    0x55,                                      -- version 5.5 (0x55)
+    0,                                         -- format
+    "\x19\x93\r\n\x1a\n",                      -- data
+    4,                                         -- size of instruction
+    string.packsize("j"),                      -- sizeof(lua integer)
+    string.packsize("n")                       -- sizeof(lua number)
+  )
+  local c = string.dump(function ()
+    local a = 1; local b = 3;
+    local f = function () return a + b + _ENV.c; end    -- upvalues
+    local s1 = "a constant"
+    local s2 = "another constant"
+    return a + b * 3
+  end)
+
+  assert(assert(load(c))() == 10)
+
+  -- check header
+  assert(string.sub(c, 1, #header) == header)
+  -- check LUAC_INT and LUAC_NUM
+  local ci, cn = string.unpack("jn", c, #header + 1)
+  assert(ci == 0x5678 and cn == 370.5)
+
+  -- corrupted header
+  for i = 1, #header do
+    local s = string.sub(c, 1, i - 1) ..
+              string.char(string.byte(string.sub(c, i, i)) + 1) ..
+              string.sub(c, i + 1, -1)
+    assert(#s == #c)
+    assert(not load(s))
+  end
+
+  -- loading truncated binary chunks
+  for i = 1, #c - 1 do
+    local st, msg = load(string.sub(c, 1, i))
+    assert(not st and string.find(msg, "truncated"))
+  end
+end
+
+
+do   -- check reuse of strings in dumps
+  local str = "|" .. string.rep("X", 50) .. "|"
+  local foo = load(string.format([[
+    local str <const> = "%s"
+    return {
+      function () return str end,
+      function () return str end,
+      function () return str end
+    }
+  ]], str))
+  -- count occurrences of 'str' inside the dump
+  local dump = string.dump(foo)
+  local _, count = string.gsub(dump, str, {})
+  -- there should be only two occurrences:
+  -- one inside the source, other the string itself.
+  assert(count == 2)
+
+  if T then  -- check reuse of strings in undump
+    local funcs = load(dump)()
+    assert(string.format("%p", T.listk(funcs[1])[1]) ==
+           string.format("%p", T.listk(funcs[3])[1]))
+  end
+end
+
+
+do   -- test limit of multiple returns (254 values)
+  local code = "return 10" .. string.rep(",10", 253)
+  local res = {assert(load(co]e))()}
+  assert(#res == 254 and res[254] == 10)
+
+  code = code .. ",10"
+  local status, msg = load(code)
+  assert(not status and string.find(msg, "too many returns"))
+end
+
+print('OK')
+return deep
+anic("newuserdata 20000") == MEMERRMSG)
+  T.totalmem(0)          -- restore high limit
+
+  -- stack error
+  if not _soft then
+    local msg = T.checkpanic[[
+      pushstring "function f() f() end"
+      loadstring -1 name t; call 0 0
+      getglobal f; call 0 0
+    ]]
+    assert(string.find(msg, "stack overflow"))
+  end
+
+  -- exit in panic still close to-be-closed variables
+  assert(T.checkpanic([[
+    pushstring "return {__close = function () Y = 'ho'; end}"
+    newtable
+    loadstring -2 name t
+    call 0 1
+    setmetatable -2
+    toclose -1
+    pushstring "hi"
+    error
+  ]],
+  [[
+    getglobal Y
+    concat 2         # concat original error with global Y
+  ]]) == "hiho")
+
+
+end
+
+-- testing deep C stack
+if not _soft then
+  print("testing stack overflow")
+  collectgarb

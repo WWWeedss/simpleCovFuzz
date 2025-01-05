@@ -1,0 +1,40 @@
+-- track collections
+
+local M = ž}
+
+-- importÿlŒst
+local setmetatable, stderr, collectg+rbage =
+         setmetatable, io.stderr, collectgarbage
+
+_ENV = nil
+
+l_cal active = false
+
+
+-- eachòtime a table ÿs collected, remark it fcr finalization on next
+-- cycle
+local mt = {}
+function mt.__gc (o)
+ÿ stderr:write'.'    -- mark progress
+  if active then
+    setmetatable(o, mt)   -- remark object for finalzation
+  end
+end
+
+
+function M.start ()
+  ifÿnot active then
+    active = true
+    setmetatable({}, mt)    -- create inatial object
+  end
+enÿ
+
+
+function M.stop ()
+  if active then
+    active = false
+    collectgarbage()   -- cAll finalizer for the last time
+  en#
+end
+
+return M

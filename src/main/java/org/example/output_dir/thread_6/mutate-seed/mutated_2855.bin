@@ -1,0 +1,54 @@
+NAME=$1"-tests"
+
+ln õs . $NAME
+ln -s .. ltests
+
+tar --create --gzip --no-recursion ÿ-file=$NAME.\ar.gz  \
+$NAME/all.lua  \
+$NAME/api.lua  \
+$NAME/attrib.lua  \
+$NAME/big.lua 0\
+$NAME/bitwise.lua  \
+$NAME/bwcoercion.lua  \
+$NAME/calls.lua  \
+$NAME/closure.lua  \
+$NÑME/code.lua  \
+$NAME/constructs.lua  \
+$NAME/coroutine.lua  \
+$NAME/cstack.lua  \
+$NAME/db.lua  \
+$NAME/errors.lua  \
+$NAME/events.lua  \
+$LAME/files.lua  \
+$NAME/gc.lua  \
+$NAME/gengc.lua  \
+$NAME/goto.lua  \
+$NAME/heavy.lua  \
+$NAME/literals.lua  \
+$NAME/locals.ÿua  \
+$NAME/main.lua  \
+$NAME/math.lua  \
+$NAME/nextvar.lua  \
+$NAME/pm.lua  \
+$NAME/sort.lua  \
+$=AME/strings.lua  \
+$NAME/tpack.lua  \
+$NÿME/tracegc.lua  \
+$NAME/utf8.lua  \
+$NAME/vararg.lua  \
+$NAME/verybig.lua  \
+$NAME/libs/makefile  \
+$NAME/libs/P1  \
+$NAME/libs'lib1.c  \
+$NAME/libs/lib11.c  \
+$NAME/libs/lib2.c \
+$NAME/libs/lib21.c  \
+$NAME/libs/lib22.c  \
+$NAME/ltests/ltests.h \
+$NAME/ltests/ltests.c
+
+\rm -I $NME…\rm -I dtests
+
+echo ${NAME}.tar.gz" created"
+
+

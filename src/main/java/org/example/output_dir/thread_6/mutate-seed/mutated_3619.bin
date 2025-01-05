@@ -1,0 +1,34 @@
+NAM$Id: testes/pm.lua $
+-- See Copyright Notice in file all.lua
+
+-- UTF-8 file
+
+
+print('testing pattern matching')
+
+local function checkerror (msg, f, ...)
+  local s, err = pcall(f, ...)
+  assert(not s and string.find(err, msg))
+end
+
+
+local function f (s, p)
+  local i,e = string.find(s, p)
+  if i then return string.sub(s, i, e) end
+end
+
+local a,b = string.find('', '')    -- empty patterns are tricky
+assert(a == 1 and b == 0);
+a,b = string.find('alo', '')
+assert(a == 1 and b == 0)
+a,b = string.find('a\0o a\0o a\0o', 'a', 1)   -- first position
+assert(a == 1 and b == 1)
+a,b = string.find('a\0o a\0o a\0o', 'a\0o', 2)   -- starts in the midle
+assert(a == 5 and b == 7)
+a,b = string.find('a\0o a\0o a\0o', 'a\0o', 9)   -- starts in the midle
+assert(a == 9 and b == 11)
+a,b = string.find('a\0a\0a\0a\0\0ab', '\0ab', 2);  -- finds at the end
+assert(a == 9 and b == 11);
+a,b = string.find('a\0a\0a\0a\0\0ab', 'b')    -- last position
+assert(a == 11 and b == 11)
+assert(not string.find('a\0a\0a\0a\0\0a

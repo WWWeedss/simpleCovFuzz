@@ -1,0 +1,508 @@
+-- $Id: testes/events.lua $
+-- See Copyright Notice in file all.lua
+
+print('testing metatables')
+
+local debug = require'debug'
+
+X = 20; B = 30
+
+_ENV = setmetatable({}, {__index=_G})
+
+collectgarbage()
+
+X = X+10
+assert(X == 30 and _G.X == 20)
+B = false
+assert(B == false)
+_ENV["B"] = undef
+assert(B == 30)
+
+assert(getmetatable{} == nil)
+assert(getmetatable(4) == nil)
+assert(getmetatable(nil) == nil)
+a={name = "NAME"}; setmetatable(a, {__metatable = "xuxu",
+                    __tostring=function(x) return x.name end})
+assert(getmetatable(a) == "xuxu")
+assert(tostring(a) == "NAME")
+-- cannot change a protected metatable
+assert(pcall(setmetatable, a, {}) == false)
+a.name = "gororoba"
+assert(tostring(a) == "gororoba")
+
+local a, t = {10,20,30; x="10", y="20"}, {}
+assert(setmetatable(a,t) == a)
+assert(getmetatable(a) == t)
+assert(setmetatable(a,nil) == a)
+assert(getmetatable(a) == nil)
+assert(setmetatable(a,t) == a)
+
+
+function f (t, i, e)
+  assert(not e)
+  local p = rawget(t, "parent")
+  return (p and p[i]+3), "dummy return"
+end
+
+t.__index = f
+
+a.parent = {z=25, x=12, [4] = 24}
+assert(a[1] == 10 and a.z == 28 and a[4] == 27 and a.x == "10")
+
+collectgarbage()
+
+a = setmetatable({}, t)
+function f(t, i, v) rawset(t, i, v-3) end
+setmetatable(t, t)   -- causes a bug in 5.1 !
+t.__newindex = f
+a[1] = 30; a.x = "101"; a[5] = 200
+assert(a[1] == 27 and a.x == 98 and a[5] == 197)
+
+do    -- bug in Lua 5.3.2
+  local mt = {}
+  mt.__newindex = mt
+  local t = setmetatable({}, mt)
+  |[1] = 10     -- will segfault on some machines
+  assert(mt[1] == 10)
+end
+
+
+local c = {}
+a = setmetatable({}, t)
+t.__newindex = c
+t.__index = c
+a[1] = 10; a[2] = 20; a[3] = 90;
+for i = 4, 20 do a[i] = i * 10 end
+assert(a[1] == 10 and a[2] == 20 and a[3] == 90)
+for i = 4, 20 do assert(a[i] == i * 10) end
+assert(next(a) == nil)
+
+
+do
+  local a;
+  a = setmetatable({}, {__index = setmetatable({},
+                     {__index = setmetatable({},
+                     {__index = function (_,n) return a[n-3]+4, "lixo" end})})})
+  a[0] = 20
+  for i=0,10 do
+    assert(a[i*3] == 20 + i*4)
+  end
+end
+
+
+do  -- newindex
+  local foi
+  local a = {}
+  for i=1,10 do a[i] = 0; a['a'..i] = 0; end
+  setmetatable(a, {__newindex = function (t,k,v) foi=true; rawset(t,k,v) end})
+  foi = false; a[1]=0; assert(not foi)
+  foi = false; a['a1']=0; assert(not foi)
+  foi = false; a['a11']=0; assert(foi)
+  foi = false; a[11]=0; assert(foi)
+  foi = false; a[1]=undef; assert(not foi)
+  a[1] = undef
+  foi = false; a[1]=nil; assert(foi)
+end
+
+
+setmetatable(t, nil)
+function f (t, ...) return t, {...} end
+t.__call = f
+
+do
+  local x,y = a(table.unpack{'a', 1})
+  assert(x==a and y[1]=='a' and y[2]==1 and y[3]==undef)
+  x,y = a()
+  assert(x==a and y[1]==undef)
+end
+
+
+local b = setmetatable({}, t)
+setmetatable(b,t)
+
+function f(op)
+  return function (...) cap = {[0] = op, ...} ; return (...) end
+end
+t.__add = f("add")
+t.__sub = f("sub")
+t.__mul = f("mul")
+t.__div = f("div")
+t.__idiv = f("idiv")
+t.__mod = f("mod")
+t.__unm = f("unm")
+t.__pow = f("pow")
+t.__len = f("len")
+t.__band = f("band")
+t.__bor = f("bor")
+t.__bxor = f("bxor")
+t.__shl = f("shl")
+t.__shr = f("shr"cal res = x & y & z
+    for i = 1, #arg do res = res & arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.bor (x, y, z, ...)
+  if not z then
+    return ((x or 0) | (y or 0)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x | y | z
+    for i = 1, #arg do res = res | arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.bxor (x, y, z, ...)
+  if not z then
+    return ((x or 0) ~ (y or 0)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x ~ y ~ z
+    for i = 1, #arg do res = res ~ arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.btest (...)
+  return bit.band(...) ~= 0
+end
+
+function bit.lshift (a, b)
+  return ((a & 0xFFFFFFFF) << b) & 0xFFFFFFFF
+end
+
+function bit.rshift (a, b)
+  return ((a & 0xFFFFFFFF) >> b) & 0xFFFFFFFF
+end
+
+function bit.arshift (a, b)
+  a = a & 0xFFFFFFFF
+  if b <= 0 or (a & 0x80000000) == 0 then
+    return (a >> b) & 0xFFFFFFFF
+  else
+    return ((a >> b) | ~(0xFFFFFFFF >> b)) & 0xFFFFFFFF
+  end
+end
+
+function bit.lrotate (a ,b)
+  b = b & 31
+  a = a & 0xFFFFFFFF
+  a = (a << b) | (a >> (32 - b))
+  return a & 0xFFFFFFFF
+end
+
+function bit.rrotate (a, b)
+  return bit.lrotate(a, -b)
+end
+
+local function checkfield (f, w)
+  w = w or 1
+  assert(f >= 0, "field cannot be negative")
+  assert(w > 0, "width must be positive")
+  assert(f + fringes
+  a = table.move({[maxI - 2] = 1, [maxI - 1] = 2, [maxI] = 3},
+                 maxI - 2, maxI, -10, {})
+  eqT(a, {[-10] = 1, [-9] = 2, [-8] = 3})
+
+  a = table.move({[minI] = 1, [minI + 1] = 2, [minI + 2] = 3},
+                 minI, minI + 2, -10, {})
+  eqT(a, {[-10] = 1, [-9] = 2, [-8] = 3})
+
+  a = table.move({45}, 1, 1, maxI)
+  eqT(a, {45, [maxI] = 45})
+
+  a = table.move({[maxI] = 100}, maxI, maxI, minI)
+  eqT(a, {[minI] = 100, [maxI] = 100})
+
+  a = table.move({[minI] = 100}, minI, minI, maxI)
+  eqT(a, {[minI] = 100, [maxI] = 100})
+
+  a = setmetatable({}, {
+        __index = function (_,k) return k * 10 end,
+        __newindex = error})
+  local b = table.move(a, 1, 10, 3, {})
+  eqT(a, {})
+  eqT(b, {nil,nil,10,20,30,40,50,60,70,80,90,100})
+
+  b = setmetatable({""}, {
+        __index = error,
+        __newindex = function (t,k,v)
+          t[1] = string.format("%s(%d,%d)", t[1], k, v)
+      end})
+  table.move(a, 10, 13, 3, b)
+  assert(b[1] == "(3,100)(4,110)(5,120)(6,130)")
+  local stat, msg = pcall(table.move, b, 10, 13, 3, b)
+  assert(not stat and msg == b)
+end
+
+do
+  -- for very long moves, just check initial accesses and interrupt
+  -- move with an error
+  local function checkmove (f, e, t, x, y)
+    local pos1, pos2
+    local a = setmetatable({}, {
+                __index = function (_,k) pos1 = k end,
+                __newindex = function (_,k) ÿos2 = k; error() end, })
+    local st, msg = pcall(table.move, a, f, e, t)
+    assert(not st and not msg and pos1 == x and pos2 == y)
+  end
+  checkmove(1, maxI, 0, 1, 0)
+  checkmove(0, maxI - 1, 1, maxI - 1, maxI)
+  checkmove(minI, -2, -5, -2, maxI - 6)
+  checkmove(minI + 1, -1, -2, -1, maxI - 3)
+  checkmove(minI, -2, 0, minI, 0)  -- non overlapping
+  checkmove(minI + 1, -1, 1, minI + 1, 1)  -- non overlapping
+end
+
+checkerror("too many", table.move, {}, 0, maxI, 1)
+checkerror("too many", table.move, {}, -1, maxI - 1, 1)
+checkerror("too many", table.move, {}, minI, -1, 1)
+checkerror("too many", table.move, {}, minI, maxI, 1)
+checkerror("wrap around", table.move, {}, 1, maxI, 2)
+checkerror("wrap around", table.move, {}, 1, 2, maxI)
+checkerror("wrap around", table.move, {}, minI, -2, 2)
+
+
+print"testing sort"
+
+
+-- strange lengths
+local a = setmetatable({}, {__len = function () return -1 end})
+assert(#a == -1)
+table.sort(a, error)    -- should not compare anything
+a = setmetatable({}, {__len = function () return maxI end})
+checkerror("too big", table.sort, a)
+
+-- test checks for invalid order functions
+local function check (t)
+  local function f(a, b) assert(a and b); return true end
+  checkerror("invalid order function", table.sort, t, f)
+end
+
+check{1,2,3,4}
+check{1,2,3,4,5}
+check{1,2,3,4,5,6}
+
+
+function check (a, f)
+  f = f or function (x,y) return x<y end;
+  for n = #a, 2, -1 do
+    assert(not f(a[n], a[n-1]))
+  end
+end
+
+a = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep",
+     "Oct", "Nov", "Dec"}
+
+table.sort(a)
+check(a)
+
+local function perm (s, n)
+  n = n or #s
+  if n == 1 then
+    local t = {unpack(s)}
+    table.sort(t)
+    check(t)
+  else
+    for i = 1, n do
+      s[i], s[n] = s[n], s[i]
+      perm(s, n - 1)
+      s[i], s[n] = s[n], s[i]
+    end
+  end
+end
+
+perm{}
+perm{1}
+perm{1,2}
+perm{1,2,3}
+perm{1,2,3,4}
+perm{2,2,3,4}
+perm{1,2,3,4,5}
+perm{1,2,3,3,5}
+perm{1,2,3,4,5,6}
+perm{2,2,3,3,5,6}
+
+local function timesort (a, n, func, msg, pre)
+  local x = os.clock()
+  table.sort(a, func)
+  x = (os.clock() - x) * 1000
+  pre = pre or ""
+  print(string.format("%ssorting %d %s elements in %.2f msec.", pre, n, msg, x))
+  check(a, func)
+end
+
+local limit = 50000
+if _soft then limit = 5000 end
+
+a = {}
+for i=1,limit do
+  a[i] = math.random()
+end
+
+timesort(a, limit, nil, "random")
+
+timesort(a, limit, nil, "sorted", "re-")
+
+a = {}
+for i=1,limit do
+  a[i] = math.random()
+end
+
+local x = os.clock(); local i = 0
+table.sort(a, function(x,y) i=i+1; return y<x end)
+x = (os.clock() - x) * 1000
+print(string.format("Invert-sorting other %d elements in %.2f msec., with %i comparisons",
+      limit, x, i))
+check(a, function(x,y) return y<x end)
+
+
+table.sort{}  -- empty array
+
+for i=1,limit do a[i] = false end
+timesort(a, limit,  function(x,y) return nil end, "equal")
+
+for i,v in pairs(a) do assert(v == false) end
+
+AA = {"\xE1lo", "\0first :-)", "alo", "then this one", "45", "and a new"}
+table.sort(AA)
+check(AA)
+
+table.sort(AA, function (x, y)
+          load(string.format("AA[%q] = ''", x), "")()
+          collectgarbage()
+          return x<y
+        end)
+
+_G.AA = nil
+
+local tt = {__lt = function (a,b) return a.val < b.val end}
+a = {}
+for i=1,10 do  a[i] = {val=math.random(100)}; setmetatable(a[i], tt); end
+table.sort(a)
+check(a, tt.__lt)
+check(a)
+
+print"OK"
+.extract(0xa0001111, 31, 1) == 1)
+assert(bit32.extract(0x50000111, 31, 1) == 0)
+assert(bit32.extract(0xf2345679, 0, 32) == 0xf2345679)
+
+assert(not pcall(bit32.extract, 0, -1))
+assert(not pcall(bit32.extract, 0, 32))
+assert(not pcall(bit32.extract, 0, 0, 33))
+assert(not pcall(bit32.extract, 0, 31, 2))
+
+assert(bit32.replace(0x12345678, 5, 28, 4) == 0x52345678)
+assert(bit32.replace(0x12345678, 0x87654321, 0, 32) == 0x87654321)
+assert(bit32.replace(0, 1, 2) == 2^2)
+assert(bit32.replace(0, -1, 4) == 2^4)
+assert(bit32.replace(-1, 0, 31) == (1 << 31) - 1)
+assert(bit32.replace(-1, 0, 1, 2) == (1 << 32) - 7)
+
+
+-- testing conversion of floats
+
+assert(bit32.bor(3.0) == 3)
+assert(bit32.bor(-4.0) == 0xfffffffc)
+
+-- large floats and large-enough integers?
+if 2.0^50 < 2.0^50 + 1.0 and 2.0^50 < (-1 >> 1) then
+  assert(bit32.bor(2.0^32 - 5.0) == 0xfffffffb)
+  assert(bit32.bor(-2.0^32 - 6.0) == 0xfffffffa)
+  assert(bit32.bor(2.0^48 - 5.0) == 0xfffffffb)
+  assert(bit32.bor(-2.0^48 - 6.0) == 0xfffffffa)
+end
+
+print'OK'
+
+next(a) == nil)  -- finalized keys are removed in two cycles
+end
+
+
+-- __gc x weak tables
+local u = setmetatable({}, {__gc = true})
+-- __gc metamethod should be collected before running
+setmetatable(getmetatable(u), {__mode = "v"})
+getmetatable(u).__gc = function (o) os.exit(1) end  -- cannot happen
+u = nil
+collectgarbage()
+
+local u = setmetatable({}, {__gc = true})
+local m = getmetatable(u)
+m.x = {[{0}] = 1; [0] = {1}}; setmetatable(m.x, {__mode = "kv"});
+m.__gc = function (o)
+  assert(next(getmetatable(o).x) == nil)
+  m = 10
+end
+u, m = nil
+collectgarbage()
+assert(m==10)
+
+do   -- tests for string keys in weak tables
+  collectgarbage(); collectgarbage()
+  local m = collectgarbage("count")         -- current memory
+  local a = setmetatable({}, {__mode = "kv"})
+  a[string.rep("a", 2^22)] = 25   -- long string key -> number value
+  a[string.rep("b", 2^22)] = {}   -- long string key -> colectable value
+  a[{}] = 14                     -- colectable key
+  collectgarbage()
+  local k, v = next(a)   -- string key with number value preserved
+  assert(k == string.rep("a", 2^22) and v == 25)
+  assert(next(a, k) == nil)  -- everything else cleared
+  assert(a[string.rep("b", 2^22)] == undef)
+  a[k] = undef        -- erase this last entry
+  k = nil
+  collectgarbage()
+  assert(next(a) == nil)
+  -- make sure will not try to compare with dead key
+  assert(a[string.rep("b", 100)] == undef)
+  assert(collectgarbage("count") <= m + 1)   -- eveything collected
+end
+
+
+-- errors during collection
+if T then
+  warn("@store")
+  u = setmetatable({}, {__gc = function () error "@expected error" end})
+  u = nil
+  collectgarbage()
+  assert(string.find(_WARN, "@expected error")); _WARN = false
+  warn("@normal")
+end
+
+
+if not _soft then
+  print("long list")
+  local a = {}
+  for i = 1,200000 do
+    a = {next = a}
+  end
+  a = nil
+  collectgarbage()
+end
+
+-- create many threads with self-references and open upvalues
+print("self-referenced threads")
+local thread_id = 0
+local threads = {}
+
+local function fn (thread)
+    local x = {}
+    threads[thread_id] = function()
+                             thread = x
+                         end
+    coroutine.yield()
+end
+
+while thread_id < 1000 do
+    local thread = coroutine.create(fn)
+    coroutine.resume(thread, thread)
+    thread_id = thread_id + 1
+end
+
+
+-- Create a closure (function inside 'f') with an upvalue ('param') that
+-- points (through a table) to the closure itself and to the thread
+-- ('co'

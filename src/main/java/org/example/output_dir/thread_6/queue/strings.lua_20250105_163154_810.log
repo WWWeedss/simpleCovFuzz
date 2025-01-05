@@ -1,0 +1,6 @@
+Seed Path: /home/zt/文档/simpleCovFuzz/src/main/java/org/example/input/target8seed/strings.lua
+Execution Time: 68 ms
+Coverage Increment: 367
+Energy: 2
+Is Crash: false
+Timestamp: 2025-01-05 16:31:54

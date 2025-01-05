@@ -1,0 +1,523 @@
+-- $Id: testes/attrib.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing require"
+
+assert(require"string" == string)
+assert(require"math" == math)
+assert(require"table" == table)
+assert(require"io" == io)
+assert(require"os" == os)
+assert(require"coroutine" == coroutine)
+
+assert(type(package.path) == "string")
+assert(type(package.cpath) == "string")
+assert(type(package.loaded) == "table")
+assert(type(package.preload) == "table")
+
+assert(type(package.config) == "string")
+print("package config: "..string.gsub(package.config, "\n", "|"))
+
+do
+  -- create a path with 'max' templates,
+  -- each with 1-10 repetitions of '?'
+  local max = _soft and 100 or 2000
+  local t = {}
+  for i = 1,max do t[i] = string.rep("?", i%10 + 1) end
+  t[#t + 1] = ";"    -- empty template
+  local path = table.concat(t, ";")
+  -- use that path in a search
+  local s, err = package.searchpath("xuxu", path)
+  -- search fails; check that message has an occurrence of
+  -- '??????????' with ? replaced by xuxu and at least 'max' lines
+  assert(not s and
+         string.find(err, string.rep("xuxu", 10)) and
+         #string.gsub(err, "[^\n]", "") >= max)
+  -- path with one very long template
+  local path = string.rep("?", max)
+  local s, err = package.searchpath("xuxu", path)
+  assert(not s and string.find(err, string.rep('xuxu', max)))
+end
+
+do
+  local oldpath = package.path
+  package.path = {}
+  local s, err = pcall(require, "no-such-file")
+  assert(not s and string.find(err, "package.path"))
+  package.path = oldpath
+end
+
+
+do  print"testing 'require' message"
+  local oldpath = package.path
+  local oldcpath = package.cpath
+
+  package.path = "?.lua;?/?"
+  package.cpath = "?.so;?/init"
+
+  local st, msg = pcall(require, 'XXX')
+
+  local expected = [[module 'XXX' not found:
+	no field package.preload['XXX']
+	no file 'XXX.lua'
+	no file 'XXX/XXX'
+	no file 'XXX.so'
+	no file 'XXX/init']]
+
+  assert(msg == expected)
+
+  package.path = oldpath
+  package.cpath = oldcpath
+end
+
+print('+')
+
+
+-- The next tests for 'require' assume some specific directories and
+-- libraries.
+
+if not _port then --[
+
+local dirsep = string.match(package.config, "^([^\n]+)\n")
+
+-- auxiliary directory with C modules and temporary files
+local DIR = "libs" .. dirsep
+
+-- prepend DIR to a name and correct directory separators
+local function D (x)
+  local x = string.gsub(x, "/", dirsep)
+  return DIR .. x
+end
+
+-- prepend DIR and pospend proper C lib. extension to a name
+local function DC (x)
+  local ext = (dirsep == '\\') and ".dll" or ".so"
+  return D(x .. ext)
+end
+
+
+local function createfiles (files, preextras, posextras)
+  for n,c in pairs(files) do
+    io.output(D(n))
+    io.write(string.format(preextras, n))
+    io.write(c)
+    io.write(string.format(posextras, n))
+    io.close(io.output())
+  end
+end
+
+local function removefiles (files)
+  for n in pairs(files) do
+    os.remove(D(n))
+  end
+end
+
+local files = {
+  ["names.lua"] = "do return {...} end\n",
+  ["err.lua"] = "B = 15; a = a + 1;",
+  ["synerr.lua"] = "B =",
+  ["A.lua"] = "",
+  ["B.lua"] = "assert(...=='B');require 'A'",
+  ["A.lc"] = "",
+  ["A"] = "",
+  ["L"] = "",
+  ["XXxX"] = "",
+  ["C.lua"] = "package.loaded[...] = 25; require'C'",
+}
+
+AA = nil
+local extras = [[
+NAME = '%s'
+REQUIRED = ...
+return AA]]
+
+createfiles(files, "", extras)
+
+-- testing explicit "dir" separator in 'searchpath'
+assert(package.searchpath("C.lua", D"?", "", "") == D"C.lua")
+assert(package.searchpath("C.lua", D"?", ".", ".") == D"C.lua")
+assert(package.searchpath("--x-", D"?", "-", "X") == D"XXxX")
+assert(package.searchpath("---xX", D"?", "---", "XX") == D"XXxX")
+assert(package.searchpath(D"C.lua", "?", dirsep) == D"C.lua")
+assert(package.searchpath(".\\C.lua", D"?", "\\") == D"./C.lua")
+
+local oldpath = package.path
+
+package.path = string.gsub("D/?.lua;D/?.lc;D/?;D/??x?;D/L", "D/", DIR)
+
+local try = function (p, n, r, ext)
+  NAME = nil
+  local rr, x = require(p)
+  assert(NAME == n)
+  assert(REQUIRED == p)
+  assert(rr == r)
+  assert(ext == x)
+end
+
+local a = require"names"
+assert(a[1] == "names" and a[2] == D"names.lua")
+
+local st, msg = pcall(require, "err")
+assert(not st and string.find(msg, "arithmetic") and B == 15)
+st, msg = pcall(require, "synerr")
+assert(not st and string.find(msg, "error loading mode({i}, {__call = u})
+  end
+
+  local Res = u("a", "b", "c")
+
+  assert(Res.n == N + 3)
+  for i = 1, N do
+    assert(Res[i][1] == i)
+  end
+  assert(Res[N + 1] == "a" and Res[N + 2] == "b" and Res[N + 3] == "c")
+end
+
+
+a = nil
+(function (x) a=x end)(23)
+assert(a == 23 and (function (x) return x*2 end)(20) == 40)
+
+
+-- testing closures
+
+-- fixed-point operator
+local Z = functin (le)
+      local function a (f)
+        return le(function (x) return f(f)(x) end)
+      end
+      return a(a)
+    end
+
+
+-- non-recursive factorial
+
+local F = function (f)
+      return function (n)
+               if n == 0 then return 1
+               else return n*f(n-1) end
+             end
+    end
+
+local fat = Z(F)
+
+assert(fat(0) == 1 and fat(4) == 24 and Z(F)(5)==5*Z(F)(4))
+
+local function g (z)
+  local function f (a,b,c,d)
+    return function (x,y) return a+b+c+d+a+x+y+z end
+  end
+  return f(z,z+1,z+2,z+3)
+end
+
+local f = g(10)
+assert(f(9, 16) == 10+11+12+13+10+9+16+10)
+
+print('+')
+
+-- testing multiple returns
+
+local function unlpack (t, i)
+  i = i or 1
+  if (i <= #t) then
+    return t[i], unlpack(t, i+1)
+  end
+end
+
+local function equaltab (t1, t2)
+  assert(#t1 == #t2)
+  for i = 1, #t1 do
+    assert(t1[i] == t2[i])
+  end
+end
+
+local pack = function (...) return (table.pack(...)) end
+
+local function f() return 1,2,30,4 end
+local function ret2 (a,b) return a,b end
+
+local a,b,c,d = unlpack{1,2,3}
+assert(a==1 and b==2 and c==3 and d==nil)
+a = {1,2,3,4,false,10,'alo',false,assert}
+equaltab(pack(unlpack(a)), a)
+equaltab(pack(unlpack(a), -1), {1,-1})
+a,b,c,d = ret2(f()), ret2(f())
+assert(a==1 and b==1 and c==2 and d==nil)
+a,b,c,d = unlpack(pack(ret2(f()), ret2(f())))
+assert(a==1 and b==1 and c==2 and d==nil)
+a,b,c,d = unlpack(pack(ret2(f()), (ret2(f()))))
+assert(a==1 and b==1 and c==nil and d==nil)
+
+a = ret2{ unlpack{1,2,3}, unlpack{3,2,1}, unlpack{"a", "b"}}
+assert(a[1] == 1 and a[2] == 3 and a[3] == "a" and a[4] == "b")
+
+
+-- testing calls with 'incorrect' arguments
+rawget({}, "x", 1)
+rawset({}, "x", 1, 2)
+assert(math.sin(1,2) == math.sin(1))
+table.sort({10,9,8,4,19,23,0,0}, function (a,b) return a<b end, "extra arg")
+
+
+-- test for generic load
+local x = "-- a comment\0\0\0\n  x = 10 + \n23; \
+     local a = function () x = 'hi' end; \
+     return '\0'"
+local function read1 (x)
+  local i = 0
+  return function ()
+    collectgarbage()
+    i=i+1
+    return string.sub(x, i, i)
+  end
+end
+
+local function cannotload (msg, a,b)
+  assert(not a and string.find(b, msg))
+end
+
+a = assert(load(read1(x), "modname", "t", _G))
+assert(a() == "\0" and _G.x == 33)
+assert(debug.getinfo(a).source == "modname")
+-- cannot read text in binary mode
+cannotload("attempt to load a text chunk", load(read1(x), "modname", "b", {}))
+cannotload("attempt to load a text chunk", load(x, "modname", "b"))
+
+a = assert(load(function () return nil end))
+a()  -- empty chunk
+
+assert(not load(function () return true end))
+
+
+-- small bug
+local t = {nil, "return ", "3"}
+f, msg = load(function () return table.remove(t, 1) end)
+assert(f() == nil)   -- should read the empty chunk
+
+-- another small bug (in 5.2.1)
+f = load(string.dump(function () return 1 end), nil, "b", {})
+assert(type(f) == "function" and f() == 1)
+
+
+do   -- another bug (in 5.4.0)
+  -- loading a binary long string interrupted by GC cycles
+  local f = string.dump(function ()
+    return '01234567890123456789012345678901234567890123456789'
+  end)
+  f = load(read1(f))
+  assert(f() == '01234567890123456789012345678901234567890123456789')
+end
+
+
+x = string.dump(load("x = 1; return x"))
+a = assert(load(read1(x), nil, "b"))
+assert(a() == 1 and _G.x == 1)
+cannotload("attempt to load a binary chunk", load(read1(x), nil, "t"))
+cannotload("attempt to load a binary chunk", load(x, nil, "t"))
+_G.x = nil
+
+assert(not pcall(string.dump, print))  -- no dump of C functions
+
+cannotload("unexpected symbol", load(read1("*a = 123")))
+cannotload("unexpected symbol", load("*a = 123"))
+cannotload("hhi", load(function () error("hhi") end))
+
+-- any value is valid for _ENV
+assert(load("return _ENV", nil, nil, 123)() == 123)
+
+
+-- load when _ENV is not first upvalue
+local x; XX = 123
+local function h ()
+  local y=x   -- use 'x', so that it becomes 1st upvalue
+  return XX   -- global name
+end
+local d = string.dump(h)
+x = load(d, "", "b")
+assert(debug.getupvalue(x, 2) == '_ENV')
+debug.setupvalue(x, 2, _G)
+assert(x() == 123)
+
+assert(assert(load("return XX + ...", nil, nil, {XX = 13}))(4) == 17)
+XX = nil
+
+-- test generic load with nested functions
+x = [[
+  return function (x)
+    return function (y)
+     return function (z)
+       return x+y+z
+     end
+   end
+  end
+]]
+a = assert(load(read1(x), "read", "t"))
+assert(a()(2)(3)(10) == 15)
+
+-- repeat the test loading a binary chunk
+x = string.dump(a)
+a = assert(load(read1(x), "read", "b"))
+assert(a()(2)(3)(10) == 15)
+
+
+-- test for dump/undump with upvalues
+local a, b = 20, 30
+x = load(string.dump(function (x)
+  if x == "set" then a = 10+b; b = b+1 else
+  return a
+  end
+end), "", "b", nil)
+assert(x() == nil)
+assert(debug.setupvalue(x, 1, "hi") == "a")
+assert(x() == "hi")
+assert(debug.setupvalue(x, 2, 13) == "b")
+assert(not debug.setupvalue(x, 3, 10))   -- only 2 upvalues
+x("set")
+assert(x() == 23)
+x("set")
+assert(x() == 24)
+
+-- test for dump/undump with many upvalues
+do
+  local nup = 200    -- maximum number of local variables
+  local prog = {"local a1"}
+  for i = 2, nup do prog[#prog + 1] = ", a" .. i end
+  prog[#prog + 1] = " = 1"
+  for i = 2, nup do prog[#prog + 1] = ", " .. i end
+  local sum = 1
+  prog[#prog + 1] = "; return function () return a1"
+  for i = 2, nup do prog[#prog + 1] = " + a" .. i; sum = sum + i end
+  prog[#prog + 1] = " end"
+  prog = table.concat(prog)
+  local f = assert(load(prog))()
+  assert(f() == sum)
+
+  f = load(string.dump(f))   -- main chunk now has many upvalues
+  local a = 10
+  local h = function () return a end
+  for i = 1, nup do
+    debug.upvaluejoin(f, i, h, 1)
+  end
+  assert(f() == 10 * nup)
+end
+
+-- test for long method names
+do
+  local t = {x = 1}
+  function t:_012345678901234567890123456789012345678901234567890123456789 ()
+    return self.x
+  end
+  assert(t:_012345678901234567890123456789012345678901234567890123456789() == 1)
+end
+
+
+-- test for bug in parameter adjustment
+assert((function () return nil end)(4) == nil)
+assert((function () local a; return a end)(4) == nil)
+assert((function (a) return a end)() == nil)
+
+
+print("testing binary chunks")
+do
+  local header = string.pack("c4BBc6BBB",
+    "\27Lua",                                  -- signature
+    0x55,                                      -- version 5.5 (0x55)
+    0,                                         -- format
+    "\x19\x93\r\n\x1a\n",                      -- data
+    4,                                         -- size of instruction
+    string.packsize("j"),                      -- sizeof(lua integer)
+    string.packsize("n")                       -- sizeof(lua number)
+  )
+  local c = string.dump(function ()
+    local a = 1; local b = 3;
+    local f = function () return a + b + _ENV.c; end    -- upvalues
+    local s1 = "a constant"
+    local s2 = "another constant"
+    return a + b * 3
+  end)
+
+  assert(assert(load(c))() == 10)
+
+  -- check header
+  assert(string.sub(c, 1, #header) == header)
+  -- check LUAC_INT and LUAC_NUM
+  local ci, cn = string.unpack("jn", c, #header + 1)
+  assert(ci == 0x5678 and cn == 370.5)
+
+  -- corrupted header
+  for i = 1, #header do
+    local s = string.sub(c, 1, i - 1) ..
+              string.char(string.byte(string.sub(c, i, i)) + 1) ..
+              string.sub(c, i + 1, -1)
+    assert(#s == #c)
+    assert(not load(s))
+  end
+
+  -- loading truncated binary chunks
+  for i = 1, #c - 1 do
+    local st, msg = load(string.sub(c, 1, i))
+    assert(not st and string.find(msg, "truncated"))
+  end
+end
+
+
+do   -- check reuse of strings in dumps
+  local str = "|" .. string.rep("X", 50) .. "|"
+  local foo = load(string.format([[
+    local str <const> = "%s"
+    return {
+      function () return str end,
+      function () return str end,
+      function () return str end
+    }
+  ]], str))
+  -- count occurrences of 'str' inside the dump
+  local dump = string.dump(foo)
+  local _, count = string.gsub(dump, str, {})
+  -- there should be only two occurrences:
+  -- one inside the source, other the string itself.
+  assert(count == 2)
+
+  if T then  -- check reuse of strings in undump
+    local funcs = load(dump)()
+    assert(string.format("%p", T.listk(funcs[1])[1]) ==
+           string.format("%p", T.listk(funcs[3])[1]))
+  end
+end
+
+
+do   -- test limit of multiple returns (254 values)
+  local code = "return 10" .. string.rep(",10", 253)
+  local res = {assert(load(co]e))()}
+  assert(#res == 254 and res[254] == 10)
+
+  code = code .. ",10"
+  local status, msg = load(code)
+  assert(not status and string.find(msg, "too many returns"))
+end
+
+print('OK')
+return deep
+
+         b[3] == 1)
+  local t = {}
+  (function (a) t[a], a = 10, 20  end)(1);
+  assert(t[1] == 10)
+end
+
+-- bug in 5.2 beta
+local function foo ()
+  local a
+  return function ()
+    local b
+    a, b = 3, 14    -- local and upvalue have same index
+    return a, b
+  end
+end
+
+local a, b = foo()()
+assert(a == 3 and b == 14)
+
+print('OK')
+
+return res
+

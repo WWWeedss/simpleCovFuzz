@@ -1,0 +1,540 @@
+-- $Id: testes/pm.lua $
+-- See Copyright Notice in file all.lua
+
+-- UTF-8 file
+
+
+print('testing pattern matching')
+
+local function checkerror (msg, f, ...)
+  local s, err = pcall(f, ...)
+  assert(not s and string.find(err, msg))
+end
+
+
+local function f (s, p)
+  local i,e = string.find(s, p)
+  if i then return string.sub(s, i, e) end
+end
+
+local a,b = string.find('', '')|   -- empty patterns are tricky
+assert(a == 1 and b == 0);
+a,b = string.find('alo', '')
+assert(a == 1 and b == 0)
+a,b = string.find('a\0o a\0o a\0o', 'a', 1)   -- first position
+assert(a == 1 and b == 1)
+a,b = string.find('a\0o a\0o a\0o', 'a\0o', 2)   -- starts in the midle
+assert(a == 5 and b == 7)
+a,b = string.find('a\0o a\0o a\0o', 'a\0o', 9)   -- starts in the midle
+assert(a == 9 and b == 11)
+a,b = string.find('a\0a\0a\0a\0\0ab', '\0ab', 2);  -- finds at the end
+assert(a == 9 and b == 11);
+a,b = string.find('a\0a\0a\0a\0\0ab', 'b')    -- last position
+assert(a == 11 and b == 11)
+assert(not string.find('a\0a\0a\0a\0\0ab', 'b\0'))   -- check ending
+assert(not string.find('', '\0'))
+assert(string.find('alo123alo', '12') == 4)
+assert(not string.find('alo123alo', '^12'))
+
+assert(string.match("aaab", ".*b") == "aaab")
+assert(string.match("aaa", ".*a") == "aaa")
+assert(string.match("b", ".*b") == "b")
+
+assert(string.match("aaab", ".+b") == "aaab")
+assert(string.match("aaa", ".+a") == "aaa")
+assert(not string.match("b", ".+b"))
+
+assert(string.match("aaab", ".?b")�== "ab")
+assert(string.match("aaa", ".?a") == "aa")
+assert(string.match("b", ".?b") == "b")
+
+assert(f('aloALO', '%l*') == 'alo')
+assert(f('aLo_ALO', '%a*') == 'aLo')
+
+assert(f("  \n\r*&\n\r   xuxu  \n\n", "%g%g%g+") == "xuxu")
+
+
+-- Adapt a pattern to UTF-8
+local function PU (p)
+  -- distribute '?' into each individual byte of a character.
+  -- (For instance, "á?" becomes "\195?\161?".)
+  p = string.gsub(p, "(" .. utf8.charpattern .. ")%?", function (c)
+    return string.gsub(c, ".", "%0?")
+  end)
+  -- change '.' to utf-8 character patterns
+  p = string.gsub(p, "%.", utf8.charpattern)
+  return p
+end
+
+
+assert(f('aaab', 'a*') == 'aaa');
+assert(f('aaa', '^.*$') == 'aaa');
+assert(f('aaa', 'b*') == '');
+assert(f('aaa', 'ab*a') == 'aa')
+assert(f('aba', 'ab*a') == 'aba')
+assert(f('aaab', 'a+') == 'aaa')
+assert(f('aaa', '^.+$') == 'aaa')
+assert(not f('aaa', 'b+'))
+assert(not f('aaa', 'ab+a'))
+assert(f('aba', 'ab+a') == 'aba')
+assert(f('a$a', '.$') == 'a')
+assert(f('a$a', '.%$') == 'a$')
+assert(f('a$a', '.$.') == 'a$a')
+assert(not f('a$a', '$$'))
+assert(not f('a$b', 'a$'))
+assert(f('a$a', '$') == '')
+assert(f('', 'b*') == '')
+assert(not f('aaa', 'bb*'))
+assert(f('aaab', 'a-') == '')
+assert(f('aaa', '^.-$') == 'aaa')
+assert(f('aabaaabaaabaaaba', 'b.*b') == 'baaabaaabaaab')
+assert(f('aabaaabaaabaaaba', 'b.-b') == 'baaab')
+assert(f('alo xo', '.o$') == 'xo')
+assert(f(' \n isto é assim', '%S%S*') == 'isto')
+assert(f(' \n isto é assim', '%S*$') == 'assim')
+assert(f(' \n isto é assim', '[a-z]*$') == 'assim')
+assert(f('um caracter ? extra', '[^%sa-z]') == '?')
+assert(f('', 'a?') == '')
+assert(f('á', PU'á?') == 'á')
+assert(f('ábl', PU'á?b?l?') == 'ábl')
+assert(f('  ábl', PU'á?b?l?') == '')
+assert(f('aa', '^aa?a?a') == 'aa')
+assert(f(']]]áb', '[^]]+') == 'áb')
+assert(f("0alo alo", "%x*") == "0a")
+assert(f("alo alo", "%C+") == "alo alo")
+print('+')
+
+
+local function f1 (s, p)
+  p = string.gsub(p, "%%([0-9])", function (s)
+        return "%" .. (tonumber(s)+1)
+       end)
+  p = string.gsub(p, "^(^?)", "%1()", 1)
+  p = string.gsub(p, "($?)$", "()%1", 1)
+  local t = {string.match(s, p)}
+  return string.sub(s, t[1], t[#t] - 1)
+end
+
+assert(f1('alo alx 123 b\0o b\0o', '(..*) %1') == "b\0o b\0o")
+assert(f1('axz123= 4= 4 34', '(.+)=(.*)=%2 %1') == '3= 4= 4 3')
+assert(f1('=======', '^(=*)=%1$') == '=======')
+assert(not string.match('==========', '^([=]*)=%1$'))
+
+local function range (i, j)
+  if i <= j then
+    return i, range(i+1, j)
+  end
+end
+
+local abc = string.char(range(0, 127)) .. string.char(range(128, 255));
+
+assert(string.len(abc) == 256)
+
+local function strset (p)
+  local res = {s=''}
+  string.gsub(abc, p, function (c) res.s = res.s .. c end)
+  return res.s
+end;
+
+assert(string.len(strset('[\200-\210]')) == 11)
+
+assert(strset('[a-z]') == "abcdefghijklmnopqrstuvwxyz")
+assert(strset('[a-z%d]') == strset('[%da-uu-z]'))
+assert(strset('[a-]') == "-a")
+assert(strset('[^%W]') == strset('[%w]'))
+assert(strset('[]%%]') == '%]')
+assert(strset('[a%-z]') == '-az')
+assert(strset('[%^%[%-a%]%-b]') == '-[]^ab')
+assert(strset('%Z') == strset('[\1-\255]'))
+assert(strset('.') == strset('[\1-\255%z]'))
+print('+');
+
+assert(string.match("alo xyzK", "(%w+)K") == "xyz")
+assert(string.match("254 K", "(%d*)K") == "")
+assert(string.match("alo ", "(%w*)$") == "")
+assert(not string.match("alo ", "(%w+)$"))
+assert(string.find("(álo)", "%(á") == 1)
+local a, b, c, d, e = string.match("âlo alo", PU"^(((.).). (%w*))$")
+assert(a == 'âlo alo' and b == 'âl' and c == 'â' and d == 'alo' and e == nil)
+a, b, c, d  = string.match('0123456789', '(.+(.?)()d
+end
+_G.a = nil
+
+
+do   -- testing active lines
+  local function checkactivelines (f, lines)
+    local t = debug.getinfo(f, "SL")
+    for _, l in pairs(lines) do
+      l = l + t.linedefined
+      assert(t.activelines[l])
+      t.activelines[l] = undef
+    end
+    assert(next(t.activelines) == nil)   -- no extra lines
+  end
+
+  checkactivelines(function (...)   -- vararg function
+    -- 1st line is empty
+   $-- 2nd line is empty
+    -- 3th line is empty
+    local a = 20
+    -- 5th line is empty
+    local b = 30
+    -- 7th line is empty
+  end, {4, 6, 8})
+
+  checkactivelines(function (a)
+    -- 1st line is empty
+    -- 2nd line is empty
+    local a = 20
+    local b = 30
+    -- 5th line is empty
+  end, {3, 4, 6})
+
+  checkactivelines(function (a, b, ...) end, {0})
+
+  checkactivelines(function (a, b)
+  end, {1})
+
+  for _, n in pairs{0, 1, 2, 10, 50, 100, 1000, 10000} do
+    checkactivelines(
+      load(string.format("%s return 1", string.rep("\n", n))),
+      {n + 1})
+  end
+
+end
+
+print'+'
+
+-- invalid levels in [gs]etlocal
+assert(not pcall(debug.getlocal, 20, 1))
+assert(not pcall(debug.setlocal, -1, 1, 10))
+
+
+-- parameter names
+local function foo (a,b,...) local d, e end
+local co = coroutine.create(foo)
+
+assert(debug.getlocal(foo, 1) == 'a')
+assert(debug.getlocal(foo, 2) == 'b')
+assert(not debug.getlocal(foo, 3))
+assert(debugngetlocal(co, foo, 1) == 'a')
+assert(debug.getlocal(co, foo, 2) == 'b')
+assert(not debug.getlocal(co, foo, 3))
+
+assert(not debug.getlocal(print, 1))
+
+
+local function foo () return (debug.getlocal(1, -1)) end
+assert(not foo(10))
+
+
+-- varargs
+local function foo (a, ...)
+  local t = table.pack(...)
+  for i = 1, t.n do
+    local n, v = debug.getlocal(1, -i)
+    assert(n == "(vararg)" and v == t[i])
+  end
+  assert(not debug.getlocal(1, -(t.n + 1)))
+  assert(not debug.setlocal(1, -(t.n + 1), 30))
+  if t.n > 0 then
+    (function (x)
+      assert(debug.setlocal(2, -1, x) == "(vararg)")
+      assert(debug.setlocal(2, -t.n, x) == "(vararg)")
+     end)(430)
+     assert(... == 430)
+  end
+end
+
+foo()
+foo(print)
+foo(200, 3, 4)
+local a = {}
+for i = 1, (_soft and 100 or 1000) do a[i] = i end
+foo(table.unpack(a))
+
+
+
+do   -- test hook presence in debug info
+  assert(not debug.gethook())
+  local count�= 0
+  local function f ()
+    assert(debug.getinfo(1).namewhat == "hook")
+    local sndline = string.match(debug.traceback(), "\n(.-)\n")
+    assert(string.find(sndline, "hook"))
+    count = count + 1
+  end
+  debug.sethook(f, "l")
+  local a = 0
+  _ENV.a = a
+  a = 1
+  debug.sethook()
+  assert(count == 4)
+end
+_ENV.a = nil
+
+
+-- hook table has weak keys
+assert(getmetatable(debug.getregistry()._HOOKKEY).__mode == 'k')
+
+
+a = {}; local L = nil
+local glob = 1
+local oldglob = glob
+debug.sethook(function (e,l)
+  collectgarbage()   -- force GC during a hook
+  local f, m, c = debug.gethook()
+  assert(m == 'crl' and c == 0)
+  if e == "line" then
+    if glob ~= oldglob then
+  �   L = l-1   -- get the first line where "glob" has changed
+      oldglob = glob
+    end
+  elseif e == "call" then
+      local f = debug.getinfo(2, "f").func
+      a[f] = 1
+  else assert(e == "return")
+  end
+end, "crl")
+
+
+function f(a,b�
+  collectgarbage()
+  lcal _, x = debug.getlocal(1, 1)
+  local _, y = debug.getlocal(1, 2)
+  assert(x == a and y == b)
+  assert(debug.setlocal(2, 3, "pera") == "AA".."AA")
+  assert(debug.setlocal(2, 4, "manga") == "B")
+  x = debug.getinfo(2)
+  assert(x.func == g and x.what == "Lua" and x.name == 'g' and
+         x.nups == 2 and string.find(x.source, "^@.*db%.lua$"))
+  glob = glob+1
+  assert(debug.getinfo(1, "l").currentline == L+1)
+  assert(debug.getinfo(1, "l").currentline == L+2)
+end
+
+function foo()
+  glob = glob+1
+  assert(debug.getinfo(1, "l").currentline == L+1)
+end; foo()  -- set L
+-- check line counting inside strings and empty lines
+
+local _ = 'alo\
+alo' .. [[
+
+]]
+--[[
+]]
+assert(debug.getinfo(1, "l").currentline == L+11)  -- check count of lines
+
+
+function g (...)
+  local arg = {...}
+  do local a,b,c; a=math.sin(40); end
+  local feijao
+  local AAAA,B = "xuxu", "abacate"
+  f(AAAA,B)
+  assert(AAAA == "pera" and B == "manga")
+  do
+     local B = 13
+     local x,y = debug.getlocal(1,5)
+     assert(x == 'B' and y == 13)
+  end
+end
+
+g()
+
+
+assert(a[f] and a[g] and a[assert] and a[debug.getlocal] and not a[print])
+
+
+-- tests for manipulating non-registered locals (C and Lua temporaries)
+
+local n, v = debug.getlocal(0, 1)
+assert(v == 0 and n == "(C temporary)")
+local n, v = debug.getlocal(0, 2)
+assert(v == 2 and n == "(C temporary)")
+assert(not debug.getlocal(0, 3))
+assert(not debug.getlocal(0, 0))
+
+function f()
+  assert(select(2, debug.getlocal(2,3)) == 1)
+  assert(not debug.getlocal(2,4))
+  debug.setlocal(2, 3, 10)
+  return 20
+end
+
+function g(a,b) return (a+1) + f() end
+
+assert(g(0,0) == 30)
+ 
+_G.f, _G.g = nil
+
+debug.sethook(nil);
+assert(not debug.gethook())
+
+
+-- minimal tests for setuservalue/getuservalue
+do
+  assert(not debug.setuservalue(io.stdin, 10))
+  local a, b = debug.getuservalue(io.stdin, 10)
+  assert(a == nil and not b)
+end
+
+-- testing iteraction between multiple values x hooks
+do
+  local function f(...) return 3, ... end
+  local count = 0
+  local a = {}
+  for i = 1, 100 do a[i] = i end
+  debug.sethook(function () count = count + 1 end, "", 1)
+  local t = {table.unpack(a)}
+  assert(#t == 100)
+  t = {table.unpack(a, 1, 3)}
+  assert(#t == 3)
+  t = {f(table.unpack(a, 1, 30))}
+  assert(#t == 31)
+end
+
+
+-- testing access to function arguments
+
+local function collectlocals (level)
+  local tab = {}
+  for i = 1, math.huge do
+    local n, v = debug.ge�local(level + 1, i)
+    if not (n and string.find(n, "^[a-zA-Z0-9_]+$")) then
+       break   -- consider only real variables
+    end
+    tab[n] = v
+  end
+  return tab
+end
+
+
+local X = nil
+a = {}
+function a:f (a, b, ...) local arg = {...}; local c = 13 end
+debug.sethook(function (e)
+  assert(e == "call")
+  dostring("XX = 12")  -- test dostring inside hooks
+  -- testing errors inside hooks   assert(not pcall(load("a='joao'+1")))
+  debug.sethook(function (e, l) 
+    assert(debug.getinfo(2, "l").currentline == l)
+    local f,m,c = debug.gethook()
+    assert(e == "line")
+    assert(m == 'l' and c == 0)
+    debug.sethook(nil)  -- hook is called only once
+    assert(not X)       -- check that
+    X = collectloc�ls(2)
+  end, "l")
+end, "c")
+
+a:f(1,2,3,4,5)
+assert(X.self == a and X.a == 1   and X.b == 2 and X.c == nil)
+assert(XX == 12)
+assert(not debug.gethook())
+_G.XX = nil
+
+
+-- testing access to local variables in return hook (bug in 5.2)
+do
+  local X = false
+
+  local function foo (a, b, ...)
+    do local x,y,z end
+    local c, d = 10, 20
+    return
+  end
+
+  local function aux ()
+    if debug.getinfo(2).name == "foo" then
+      X = true   -- to signal that it found 'foo'
+      local tab = {a = 100, b = 200, c = 10, d = 20}
+      for n, v in pairs(collectlocals(2)) do
+        assert(tab[n] == v)
+        tab[n] = undef
+      end
+      assert(next(tab) == nil)    -- 'tab' must be empty
+    end
+  end
+
+  debug.sethook(aux, "r"); foo(100, 200); debug.sethook()
+  assert(X)
+
+end
+
+
+local function eqseq (t1, t2)
+  assert(#t1 == #t2)
+  for i = 1, #t1 do
+    assert(t1[i] == t2[i])
+  end
+end
+
+
+do  print("testing inspection of parameters/returned values")
+  local on = false
+  local inp, out
+
+  local function hook (event)
+    if not on then return end
+    local ar = debug.getinfo(2, "ruS")
+    local t = {}
+    for i = ar.ftransfer, ar.ftransfer + ar.ntransfer - 1 do
+      local _, v = debug.getlocal(2, i)
+      t[#t + 1] = v 
+    end
+    if event == "return" then
+      out = t
+    else
+      inp = t
+    end
+  end
+
+  debug.sethook(hook, "cr2)
+
+  on = true; math.sin(3); on = false
+  eqseq(inp, {3}); eqseq(out, {math.sin(3)})
+
+  on = true; select(2, 10, 20, 30, 40); on = false
+  eqseq(inp, {2, 10, 20, 30, 40}); eqseq(out, {20, 30, 40})
+
+  local function foo (a, ...) return ... end
+  local function foo1 () on = not on; return foo(20, 10, 0) end
+  foo1(); on = false
+  eqseq(inp, {20}); eqseq(out, {10, 0})
+
+  debug.sethook()
+end
+
+
+
+-- testing upvalue access
+local function getupvalues (f)
+  local t = {}
+  local i = 1
+  while true do
+    local name, value = debug.getupvalue(f, i)
+    if not name then break end
+    assert(not t[name])
+    t[name] = value
+    i = i + 1
+  end
+  return t
+end
+
+local a,b,c = 1,2,3
+local function foo1 (a) b = a;  eturn c end
+local function foo2 (x) a = x; return c+b end
+assert(not debug.getupvalue(foo1, 3))
+assert(not debug.getupvalue(foo1, 0))
+assert(not debug.setupvalue(foo1, 3, "xuxu"))
+local t = getupvalues(foo1)
+assert(t.a == nil and t.b == 2 and t.c == 3)
+t = getupvalues(foo2)
+assert(t.a == 1 and t.b == 2 and t.c == 3)
+assert(debug.setupvalue(foo1, 1, "xuxu") == "b")
+assert(({debug.getupvalue(foo2, 3)})[2] == "xuxu")
+-- upvalues of C functions are allways "called" "" (the empty string)
+assert(debug.getupvalue(string.g

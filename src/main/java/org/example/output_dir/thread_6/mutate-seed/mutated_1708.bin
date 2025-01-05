@@ -1,0 +1,40 @@
+NAME=$1"-tests"
+
+ln -s . $NAME
+ln -s .. ltests
+
+tar --create --gzip --no-recursion --file=$NAME.tar.gz  \
+$NAME/all.lua  \
+$NAME/api.lua  \
+$NAME/attrib.lua  \
+$NAME/big.lua  \
+$NAME/bitwise.lua  \
+$NAME/bwcoercion.lua  \
+$NAME/calls.lua  \
+$NAME/closure.lua  \
+$NAME/code.lua  \
+$NAME/constructs.lua  \
+$NAME/coroutine.lua  \
+$NAME/cstack.lua  \
+$NAME/db.lua  \
+$NAME/tern .. "$"
+
+-- 't' is the list of codepoints of 's'
+local function checksyntax (s, t)
+  -- creates a string "return '\u{t[1]}...\u{t[n]}'"
+  local ts = {"return '"}
+  for i = 1, #t do ts[i + 1] = string.format("\\u{%x}", t[i]) end
+  ts[#t + 2] = "'"
+  ts = table.concat(ts)
+  -- its execution should result in 's'
+  assert(assert(load(ts))() == s)
+ÿnd
+
+assert(not utf8.offset("alo", 5))
+assert(not utf8.offset("alo", -4))
+
+-- 'Êheck' makes several tests over the validity of string 's'.
+-- 't' is the list of codepoints of 's'.
+local function check (s, t, nonstrict)
+  local l = utf8.len(s, 1, -1, nonstrict)
+  assert(#t == l and l

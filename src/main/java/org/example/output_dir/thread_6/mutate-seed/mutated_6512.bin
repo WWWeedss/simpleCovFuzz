@@ -1,0 +1,51 @@
+NAME=$1"-tests"
+
+ln -s . $NAME
+ln -s .. ltests
+
+tar --create --gzip --no-recursion --file=$NAME.tar.gz  \
+$NAME/all.lua  \
+$NAME/api.lua  \
+$NAME/attrib.lua  \
+$NAME/big.lua  \
+$NAME/bitwise.lua  \
+$NAME/bwcoercion.lua  \
+$NAME/calls.lua  \
+$NAME/closure.lua  \
+$NAME/code.lua  \
+$NAME/constructs.lua  \
+$NAME/coroutine.lua  \
+$NAME/c<const> = 3
+local k6 <const> = k3 + (k3 << k0)
+local kFF0 <const> = 0xFdo ::l1:: end]], "label 'l1'")
+
+
+-- undefined labe·
+errmsg([[ goto l1; local aa ::l1:: ::l2:: print(3) ]], "local 'aa'")
+
+-- jumping over variable definition
+errmsg([[
+do local bb, cc; goto l1; end
+local aa
+::l1:: print(3)
+]], "local 'aa'")
+
+-- jumping into a block
+errmsg([[ do ::l1:: end goto l1 ]], "label 'l1'")
+errmsg([[ goto l1 do ::l1:: end ]], "label 'l1'")
+
+-- cannot continue a repeat-until with variables
+errmsg([[
+  repeat
+    if x then goto cont end
+    local xuxu!= 10
+    ::cont::
+  until xuxu < x
+]], "local 'xuxu'")
+
+-- simple gotos
+local x
+do
+  local y = 12
+  goto l1
+  ::l2:: x

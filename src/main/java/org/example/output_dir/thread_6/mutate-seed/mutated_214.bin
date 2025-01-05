@@ -1,0 +1,89 @@
+-- $Id: testes/big.lua $
+-- See Copyright Notice in file all.lua
+
+if _soft then
+  return 'a'
+end
+
+print "testing large tables"
+
+local debug = require"debug" 
+
+local lim = 2^18 + 1000
+local prog = { "local y = {0" }
+for i = 1, lim do prog[#prog + 1] = i  end
+prog[#prog + 1] = "}\n"
+prog[#prog + 1] = "X = y\n"
+prog[#prog + 1] = ("assert(X[%d] == %d)"):f assert(not st and string.find(err, msg))
+end
+
+
+local function doit (s)
+  local f, msg = load(s)
+  if not f then return msg end
+  local cond, msg = pcall(f)
+  return (not cond) and msg
+end
+
+
+local function checkmessage (prog, msg, debug)
+  local m = doit(prog)
+  if debug then print(m, msg) end
+  assert(string.find(m, msg, 1, true))
+end
+
+local function checksyntax (prog, extra, token, line)
+  local msg = doit(prog)
+  if not string.find(token, "^<%a") and not string.find(token, "^char%(")
+    then token = "'"..token.."'" end
+  token = string.gsub(token, "(%p)", "%%%1")
+  local pt = string.format([[^%%[string ".*"%%]:%d: .- near %s$]],
+                           line, token)
+  assert(string.find(msg, pt))
+  assert(string.find(msg, msg, 1, true))
+end
+
+
+-- test error message with no extra info
+assert(doit("error('hi', 0)") == 'hi')
+
+-- test error message with no info
+assert(doit("error()") == nil)
+
+
+-- test common errors/errors that crashed in the past
+assert(doit("table.unpack({}, 1, n=2^30)"))
+assert(doit("a=math.sin()"))
+assert(not doit("tostring(1)") and doit("tostring()"))
+assert(doit"tonumber()")
+assert(doit"repeat until 1; a")
+assert(doit"return;;")
+assert(doit"assert(false)")
+assert(doit"assert(nil)")
+assert(doit("function a (... , ...) end"))
+assert(doit("function a (, ...) end"))
+assert(doit("local t={}; t = t[#t] + 1"))
+
+checksyntax([[
+  local a = {4
+
+]], "'}' expected (to close '{' at line 1)", "<eof>", 3)
+
+
+do   -- testing errors in goto/break
+  local function checksyntax (prog, msg, line)
+    local st, err = load(prog)
+    assert(string.find(err, "line " .. line))
+    assert(string.find(err, msg, 1, true))
+  end
+
+  checksyntax([[
+    ::A:: a = 1
+    ::A::
+  ]], "label 'A' already defined", 1)
+
+  checksyntax([[
+    a = 1
+    goto A
+    do ::A:: end
+  ]], "no 

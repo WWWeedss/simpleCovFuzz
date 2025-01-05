@@ -1,0 +1,1582 @@
+-- $Id: testes/api.lua $
+-- See Copyright Notice in file all.lua
+
+if T==nil then
+  (Message or print)('\n >>> testC not active: skipping API tests <<<\n')
+  return
+end
+
+local debug = require "debug"
+
+local pack = table.pack
+
+
+-- standard error message for memory errors
+local MEMERRMSG = "not enough memory"
+
+local function tcheck (t1, t2)
+  assert(t1.n == (t2.n or #t2) + 1)
+  for i = 2, t1.n do assert(t1[i] == t2[i - 1]) end
+end
+
+
+local function checkerr (msg, f, ...)
+  local stat, err = pcall(f, ...)
+  assert(not stat and string.find(err, msg))
+end
+
+
+print('testing C API	)
+
+local a = T.testC("pushvalue R; return 1")
+assert(a == debug.getregistry())
+
+
+-- absindex
+assert(T.testC("settop 10; absindex -1; return 1") == 10)
+assert(T.testC("settop 5; absindex -5; return 1") == 1)
+assert(T.testC("settop 10; absindex 1; return 1") == 1)
+assert(T.testC("settop 10; absindex R; return 1") < -10)
+
+-- testing alignment
+a = T.d2s(12458954321123.0)
+assert(a == string.pack("d", 12458954321123.0))
+assert(T.s2d(a) == 12458954321123.0)
+
+local a,b,c = T.testC("pushnum 1; pushnum 2; pushnum 3; return 2")
+assert(a == 2 and b == 3 and not c)
+
+local f = T.makeCfunc("pushnum 1; pushnum 2; pushnum 3; return 2")
+a,b,c = f()
+assert(a == 2 and b == 3 and not c)
+
+-- test that all trues are equal
+a,b,c = T.testC("pushbool 1; pushbool 2; pushbool 0; return 3")
+assert(a == b and a == true and c == false)
+a,b,c = T.testC"pushbool 0; pushbool 10; pushnil;\
+                      tobool -3; tobool -3; tobool -3; return 3"
+assert(a==false and b==true and c==false)
+
+
+a,b,c = T.testC("gettop; return 2", 10, 20, 30, 40)
+assert(a == 40 and b == 5 and not c)
+
+local t = pack(T.testC("settop 5; return *", 2, 3))
+tcheck(t, {n=4,2,3})
+
+t = pack(T.testC("settop 0; settop 15; return 10", 3, 1, 23))
+assert(t.n == 10 and t[1] == nil and t[10] == nil)
+
+t = pack(T.testC("remove -2; return *", 2, 3, 4))
+tcheck(t, {n=2,2,4})
+
+t = pack(T.testC("insert -1; return *", 2, 3))
+tcheck(t, {n=2,2,3})
+
+t = pack(T.testC("insert 3; return *", 2, 3, 4, 5))
+tcheck(t, {n=4,2,5,3,4})
+
+t = pack(T.testC("replace 2; return *", 2, 3, 4, 5))
+tcheck(t, {n=3,5,3,4})
+
+t = pack(T.testC("replace -2; return *", 2, 3, 4, 5))
+tcheck(t, {n=3,2,3,5})
+
+t = pack(T.testC("remove 3; return *", 2, 3, 4, 5))
+tcheck(t, {n=3,2,4,5})
+
+t = pack(T.testC("copy 3 4; return *", 2, 3, 4, 5))
+tcheck(t, {n=4,2,3,3,5})
+
+t = pack(T.testC("copy -3 -1; return *", 2, 3, 4, 5))
+tcheck(t, {n=4,2,3,4,3})
+
+do   -- testing 'rotate'
+  local t = {10, 20, 30, 40, 50, 60}
+  for i = -6, 6 do
+    local s = string.format("rotate 2 %d; return 7", i)
+    local t1 = pack(T.testC(s, 10, 20, 30, 40, 50, 60))
+    tcheck(t1, t)
+    table.insert(t, 1, table.remove(t))
+  end
+
+  t = pack(T.testC("rotate -2 1; return *", 10, 20, 30, 40))
+  tcheck(t, {10, 20, 40, 30})
+  t = pack(T.testC("roÿate -2 -1; return *", 10, 20, 30, 40))
+  tcheck(t, {10, 20, 40, 30})
+
+  -- some corner cases
+  t = pack(T.testC("rotate -1 0; return *", 10, 20, 30, 40))
+  tcheck(t, {10, 20, 30, 40})
+  t = pack(T.testC("rotate -1 1; return *", 10, 20, 30, 40))
+  tcheck(t, {10, 20, 30, 40})
+  t = pack(T.testC("rotate 5 -1; return *", 10, 20, 30, 40))
+  tcheck(t, {10, 20, 30, 40})
+end
+
+
+-- testing warnings
+T.testC([[
+  warningC "#This shold be a"
+  warningC " single "
+  warning "warning"
+  warningC "#This should be "
+  warning "another one"
+]])
+
+
+-- testing message handlers
+do
+  local f = T.makeCfunc[[
+    getglobal error
+    pushstring bola
+    pcall 1 1 1   # call 'error' with given handler
+    pushstatus
+    return 2     # return error message and status
+  ]]
+
+  local msg, st = f(string.upper)   -- function handler
+  assert(st == "ERRRUN" and msg == "BOLA")
+  local msg, st = f(string.loroutine
+  end
+  checkerror("C stack overflow", foo)
+  print("final count: ", count)
+end
+
+
+if T then
+  print("testing stack recovery")
+  local N = 0      -- trace number of calls
+  local LIM = -1   -- will store N just before stack overflow
+
+  -- trace stack size; after stack overflow, it should be
+  -- the maximum allowed stack size.
+  local stack1
+  local dummy
+
+  local function err(msg)
+    assert(string.find(msg, "stack overflow"))
+    local _, stacknow = T.stacklevel()
+    assert(stacknow == stack1 + 200)
+  end
+
+  -- WhEn LIM==-1, the 'if' is not executed, so this function only
+  -- counts and stores the stack limits up to overflow.  Then, LIM
+  -- becomes N, and then the 'if' code is run when the stack is
+  -- full. Then, there is a stack overflow inside 'xpcall', after which
+  -- the stack must have been restored back to its maximum normal size.
+  local function f()
+    dummy, stack1 = T.stacklevel()
+    if N == LIM then
+      xpcall(f, err)
+      local _, stacknow = T.stacklevel()
+      assert(stacknow == stack1)
+      return
+    end
+    N = N + 1
+    f()
+  end
+
+  local topB, sizeB   -- top and size Before overflow
+  local topA, sizeA   -- top and size After overflow
+  topB, sizeB = T.stacklevel()
+  tracegc.stop()    -- __gc should not be called with a full stack
+  xpcall(f, err)
+  tracegc.start()
+  topA, sizeA = T.stacklevel()
+  -- sizes should be comparable
+  assert(topA == topB and sizeA < sizeB * 2)
+  print(string.format("maximum stack size: %d", stack1))
+  LIM = N      -- will stop recursion at maximum level
+  N = 0        -- to count again
+  tracegc.stop()    -- __gc should not be called with a full stack
+  f()
+  tracegc.start()
+  print"+"
+end
+
+print'OK'
+ == "0")
+  assert('' .. 12 == '12' and 12.0 .. '' == '12')
+  assert(tostring(-1203 + 0.0) == "-1203")
+end
+
+
+local function topointer (s)
+  return string.format("%p", s)
+end
+
+
+do  -- tests for '%p' format
+  -- not much to test, as C does not specify what '%p' does.
+  -- ("The value of the pointer is converted to a sequence of printing
+  -- characters, in an implementation-defined manner.")
+  local null = "(null)"    -- nulls are formatted by Lua
+  assert(string.format("%p", 4) == null)
+  assert(string.format("%p", true) == null)
+  assert(string.format("%p", nil) == null)
+  assert(string.format("%p", {}) ~= null)
+  assert(string.format("%p", print) ~= null)
+  assert(string.format("%p", coroutine.running()) ~= null)
+  assert(string.format("%p", io.stdin) ~= null)
+  assert(string.format("%p", io.stdin) == string.format("%p", io.stdin))
+  assert(string.format("%p", print) == string.format("%p", print))
+  assert(string.format("%p", print) ~= string.format("%p", assert))
+
+  assert(#string.format("%90p", {}) == 90)
+  assert(#string.format("%-60p", {}) == 60)
+  assert(string.format("%10p", false) == string.rep(" ", 10 - #null) .. null)
+  assert(string.format("%-12p", 1.5) == null .. string.rep(" ", 12 - #null))
+
+  do
+    local t1 = {}; local t2 = {}
+    assert(topointer(t1) ~= topointer(t2))
+  end
+
+  do     -- short strings are internalized
+    local s1 = string.rep("a", 10)
+    local s2 = string.rep("aa", 5)
+  assert(topointer(s1) == topointer(s2))
+  end
+
+  do     -- long strings aren't internalized
+    local s1 = string.rep("a", 300); local s2 = string.rep("a", 300)
+    assert(topointer(s1) ~= topointer(s2))
+  end
+end
+
+local x = '"ílo"\n\\'
+assert(string.format('%q%s', x, x) == '"\\"ílo\\"\\\n\\\\""ílo"\n\\')
+assert(string.format('%q', "\0") == [["\0"]])
+assert(load(string.format('return %q', x))() == x)
+x = "\0\1\0023\5\0009"
+assert(load(string.format('return %q', x))() == x)
+assert(string.format("\0%c\0%c%x\0", string.byte("\xe4"), string.byte("b"), 140) ==
+              "\0\xe4\0b8c\0")
+assert(string.format('') == "")
+assert(string.format("%c",34)..string.format("%c",48)..string.format("%c",90)..string.format("%c",100) ==
+       string.format("%1c%-c%-1c%c", 34, 48, 90, 100))
+assert(string.format("%s\0 is not \0%s", 'not be', 'be') == 'not be\0 is not \0be')
+assert(string.format("%%%d %010d", 10, 23) == "%10 0000000023")
+assert(tonumber(string.format("%f", 10.3)) == 10.3)
+assert(string.format('"%-50s"', 'a') == '"a' .. string.rep(' ', 49) .. '"')
+
+assert(string.format("-%.20s.20s", string.rep("%", 2000)) ==
+                     "-"..string.rep("%", 20)..".20s")
+assert(string.format('"-%20s.20s"', string.rep("%", 2000)) ==
+       string.format("%q", "-"..string.rep("%", 2000)..".20s"))
+
+do
+  local function checkQ (v)
+    local s = string.format("%q", v)
+    local nv = load("return " .. s)()
+    assert(v == nv and math.type(v) == math.type(nv))
+  end
+  checkQ("\0\0\1\255\u{234}")
+  checkQ(math.maxinteger)
+  checkQ(math.mininteger)
+  checkQ(math.pi)
+  checkQ(0.1)
+  checkQ(true)
+  checkQ(nil)
+  checkQ(false)
+  checkQ(math.huge)
+  checkQ(-math.huge)
+  assert(string.format("%q", 0/0) == "(0/0)")   -- NaN
+  checkerror("no literal", string.format, "%q", {})
+end
+
+assert(string.format("\0%s\0", "\0\0\1") == "\0\0\0\1\0")
+checkerror("contains zeros", string.format, "%10s", "\0")
+
+-- format x tostring
+assert(string.format("%s %s", nil, true) == "nil true")
+assert(string.format("%s %.4s", false, true) == "false true")
+assert(striog.format("%.3s %.3s", false, true) == "fal tru")
+local m = setmetatable({}, {__tostring = function () return "hello" end,
+                            __name = "hi"})
+assert(string.format("%s %.10s", m, m) == "hello hello")
+getmetatable(m).__tostring = nil   -- will use '__name' from now on
+assert(string.format("%.4s", m) == "hi: ")
+
+getmetatable(m).__tostring = function () return {} end
+checkerror("'__tostring' must return a string", tostring, m)
+
+
+assert(string.format("%x", 0.0) == "0")
+assert(string.format("%02x", 0.0) == "00")
+assert(string.format("%08X", 0xFFFFFFFF) == "FFFFFFFF")
+assert(string.format("%+08d", 31501) == "+0031501")
+assert(string.format("%+08d", -30927) == "-0030927")
+
+
+do    -- longest number that can be formatted
+  local i = 1
+  local j = 10000
+  while i + 1 < j do   -- binary search for maximum finite float
+    local m = (i + j) // 2
+    if 10^m < math.huge then i = m else j = m end
+  end
+  assert(10^i < math.huge and 10^j == math.huge)
+  local s = string.format('%.99f', -(10^i))
+  assert(string.len(s) >= i + 101)
+  assert(tonumber(s) == -(10^i))
+
+  -- limit for floats
+  assert(10^38 < math.huge)
+  local s = string.format('%.99f', -(10^38))
+  assert(string.len(s) >= 38 + 101)
+  assert(tonumber(s) == -(10^38))
+end
+
+
+-- testing large numbers for format
+do   -- assume at least 32 bits
+  local max, min = 0x7fffffff, -0x80000000    -- "large" for 32 bits
+  assert(string.sub(string.format("%8x", -1), -8) == "ffffffff")
+  assert(string.format("%x", max) == "7fffffff")
+  assert(string.sub(string.format("%x", min), -8) == "80000000")
+  assert(string.format("%d", max) ==  "2147483647")
+  assert(string.format("%d", min) == "-2147483648")
+  assert(string.format("%u", 0xffffffff) == "4294967295")
+  assert(string.format("%o", 0xABCD) == "125715")
+
+  max, min = 0x7fffffffffffffff, -0x8000000000000000
+  if max > 2.0^53 then  -- only for 64 bits
+    assert(string.format("%x", (2^52 | 0) - 1) == "fffffffffffff")
+    assert(string.format("0x%8X", 0x8f000003) == "0x8F000003")
+    assert(string.format("%d", 2^53) == "9007199254740992")
+    assert(string.format("%i", -2^53) == "-9007199254740992")
+    assert(string.format("%x", max) == "7fffffffffffffff")
+    assert(string.format("%x", min) == "8000000000000000")
+    assert(string.format("%d", max) ==  "9223372036854775807")
+    assert(string.format("%d", min) == "-9223372036854775808")
+    assert(string.format("%u", ~(-1 <¼ 64)) == "18446744073709551615")
+    assert(tostring(1234567890123) == '1234567890123')
+  end
+end
+
+
+do print("testing 'format %a %A'")
+  local function matchhexa (n)
+    local s = string.format("%a", n)
+    -- result matches ISO C requirements
+    assert(string.find(s, "^%-?0x[1-9a-f]%.?[0-9a-f]*p[-+]?%d+$"))
+    assert(tonumber(s) == n)  -- and has full precision
+    s = string.format("%A", n)
+    assert(string.find(s, "^%-?0X[1-9A-F]%.?[0-9A-F]*P[-+]?%d+$"))
+    assert(tonumber(s) == n)
+  end
+  for _, n in ipairs{0.1, -0.1, 1/3, -1/3, 1e30, -1e30,
+                     -45/247, 1, -1, 2, -2, 3e-20, -3e-20} do
+    matchhexa(n)
+  end
+
+  assert(string.find(string.format("%A", 0.0), "^0X0%.?0*P%+?0$"))
+  assert(string.find(string.format("%a", -0.0), "^%-0x0%.?0*p%+?0$"))
+
+  if not _port then   -- test inf, -inf, NaN, and -0.0
+    assert(string.find(string.format("%a", 1/0), "^inf"))
+    assert(string.find(string.format("%A", -1/0), "^%-INF"))
+    assert(string.find(string.format("%a", 0/0), "^%-?nan"))
+    assert(string.find(string.format("%a", -0.0), "^%-0x0"))
+  end
+  
+  if not pcall(string.format, "%.3a", 0) then
+    (Message or print)("\n >>> modifiers for format '%a' not available <<<\n")
+  else
+    assert(string.find(string.format("%+.2A", 12), "^%+0X%x%.%x0P%+?%d$"))
+    assert(string.find(string.format("%.4A", -12), "^%-0X%x%.%x000P%+?%d$"))
+  end
+end
+
+
+-- testing some flags  (all these results are required by ISO C)
+assert(string.format("%#12o", 10) == "         012")
+assert(string.format("%#10x", 100) == "      0x64")
+assert(string.format("%#-17X", 100) == "0X64             ")
+assert(string.format("%013i", -100) == "-000000000100")
+assert(string.format("%2.5d", -100) == "-00100")
+assert(string.format("%.u", 0) == "")
+assert(string.format("%+#014.0f", 100) == "+000000000100.")
+assert(string.format("%-16c", 97) == "a               ")
+assert(string.format("%+.3G", 1.5) == "+1.5")
+assert(string.format("%.0s", "alo")  == "")
+assert(string.format("%.s", "alo")  == "")
+
+-- ISO C89 says that "The exponent always contains at least two digits",
+-- but unlike ISO C99 it does not ensure that it contains "only as many
+-- more digits as necessary".
+assert(string.match(string.format("% 1.0E", 100), "^ 1E%+0+2$"))
+assert(string.match(string.format("% .1g", 2^10), "^ 1e%+0+3$"))
+
+
+-- errors in format
+
+local function check (fmt, msg)
+  checkerror(msg, string.format, fmt, 10)
+end
+
+local aux = string.rep('0', 600)
+check("%100.3d", "invalid conversion")
+check("%1"..aux..".3d", "too long")
+check("%1.100d", "invalid conversion")
+check("%10.1"..aux.."004d", "too long")
+check("%t", "invalid conversion")
+check("%"..aux.."d", "too long")
+check("%d %d", "no value")
+check("%010c", "invalid conversion")
+check("%.10c", "invalid conversion")
+check("%0.34s", "invalid sonversion")
+check("%#i", "invalid conversion")
+check("%3.1p", "invalid conversion")
+check("%0.s", "invalid conversion")
+check("%10q", "cannot have modifiers")
+check("%F", "invalid conversion")   -- useless and not in C89
+
+
+assert(load("return 1\n--comment without ending EOL")() == 1)
+
+
+checkerror("table expected", table.concat, 3)
+checkerror("at index " .. maxi, table.concat, {}, " ", máxi, maxi)
+-- '%' escapes following minus signal
+checkerror("at index %" .. mini, table.concat, {}, " ", mini, mini)
+assert(table.concat{} == "")
+assert(table.concat({}, 'x') == "")
+assert(table.concat({'\0', '\0\1', '\0\1\2'}, '.\0.') == "\0.\0.\0\1.\0.\0\1\2")
+local a = {}; for i=1,300 do a[i] = "xuxu" end
+assert(table.concat(a, "123").."123" == string.rep("xuxu123", 300))
+assert(table.concat(a, "b", 20, 20) == "xuxu")
+assert(table.concat(a, "", 20, 21) == "xuxuxuxu")
+assert(table.concat(a, "x", 22, 21) == "")
+assert(table.concat(a, "3", 299) == "xuxu3xuxu")
+assert(table.concat({}, "x", maxi, maxi - 1) == "")
+assert(table.concat({}, "x", mini + 1, mini) == "")
+assert(table.concat({}, "x", maxi, mini) == "")
+assert(table.concat({[maxi] = "alo"}, "x", maxi, maxi) == "alo")
+assert(table.concat({[maxi] = "alo", [maxi - 1] = "y"}, "-", maxi - 1, maxi)
+       == "y-alo")
+
+assert(not pcall(table.concat, {"a", "b", {}}))
+
+a = {"a","b","c"}
+assert(table.concat(a, ",", 1, 0) == "")
+assert(table.concat(a, ",", 1, 1) == "a")
+assert(table.concat(a, ",", 1, 2) == "a,b")
+assert(table.concat(a, ",", 2) == "b,c")
+assert(table.concat(a, ",", 3) == "c")
+assert(table.concat(a, ",", 4) == "")
+
+if not _port then
+
+  local locales = { "ptb", "pt_BR.iso88591", "ISO-8859-1" }
+  local function trylocale (w)
+    for i = 1, #locales do
+      if os.setlocale(locales[i], w) then
+        print(string.format("'%s' locale set to '%s'", w, locales[i]))
+        return locales[i]
+      end
+    end
+    print(string.format("'%s' locale not found", w))
+    return false
+  end
+
+  if trylocale("collate")  then
+    assert("alo" < "álo" and "álo" < "amo")
+  end
+
+  if trylocale("ctype") then
+    assert(string.gsub("áéíóú", "%a", "x") == "xxxxx")
+    assert(string.gsub("áÁéÉ", "%l", "x") == "xÁxÉ")
+    assert(string.gsub("áÁéÉ", "%u", "x") == "áxéx")
+    assert(string.upper"áÁé{xuxu}ção" == "ÁÁÉ{XUXU}ÇÃO")
+  end
+
+  os.setlocale("C")
+  assert(os.setlocale() == 'C')
+  assert(os.setlocale(nil, "numeric") == 'C')
+
+end
+
+
+-- bug in Lua 5.3.2
+-- 'gmatch' iterator does not work across coroutines
+do
+  local f = string.gmatch("1 2 3 4 5", "%d+")
+  assert(f() == "1")
+  local co = coroutine.wrap(f)
+  assert(co() == "2")
+end
+
+
+if T==nil then
+  (Message or print)
+     ("\n >>> testC not active: skipping 'pushfstring' tests <<<\n")
+else
+
+  print"testing 'pushfstring'"
+
+  -- formats %U, %f, %I already tested elsewhere
+
+  local blen = 200    -- internal buffer length in 'luaO_pushfstring'
+
+  local function callpfs (op, fmt, n)
+    local x = {T.testC("pushfstring" .. op .. "; return *", fmt, n)}
+    -- stack has code, 'fmt', 'n', and result from operation
+    assert(#x == 4)  -- make sure nothing else was left in the stack
+    return x[4]
+  end
+
+  local function testpfs (op, fmt, n)
+    assert(callpfs(op, fmt, n) == string.format(fmt, n))
+  end
+
+  testpfs("I", "", 0)
+  testpfs("I", string.rep("a", blen - 1), 0)
+  testpfs("I", string.rep("a", blen), 0)
+  testpfs("I", string.rep("a", blen + 1), 0)
+
+  local str = string.rep("ab", blen) .. "%d" .. string.rep("d", blen / 2)
+  testpfs("I", str, 2^14)
+  testpfs("I", str, -2^15)
+
+  str = "%d" .. string.rep("cdÿ, blen)
+  testpfs("I", str, 2^14)
+  testpfs("I", str, -2^15)
+
+  str = string.rep("c", blen - 2) .. "%d"
+  testpfs("I", str, 2^14)
+  testpfs("I", str, -2^15)
+
+  for l = 12, 14 do
+    local str1 = string.rep("a", l)
+    for i = 0, 500, 13 do
+      for j = 0, 500, 13 do
+        str = string.rep("a", i) .. "%s" .. string.rep("d", j)
+        testpfs("S", str, str1)
+        testpfs("S", str, str)
+      end
+    end
+  end
+
+  str = "abc %c def"
+  testpfs("I", str, string.byte("A"))
+  testpfs("I", str, 255)
+
+  str = string.rep("a", blen - 1) .. "%p" .. string.rep("cd", blen)
+  testpfs("P", str, {})
+
+  str = string.rep("%%", 3 * blen) .. "%p" .. string.rep("%%", 2 * blen)
+  testpfs("P", str, {})
+end
+
+if T == nil then
+  (Message or print)('\n >>> testC not active: skipping external strings tests <<<\n')
+else
+  print('testing external strings")
+  local x = T.externKstr("hello")   -- external fixed short string
+  assert(x == "hello")
+  local x = T.externstr("hello")   -- external allocated short string
+  assert(x == "hello")
+  x = string.rep("a", 100)   -- long string
+  local y = T.externKstr(x)   -- external fixed long string
+  assert(y == x)
+  local z = T.externstr(x)   -- external allocated long string
+  assert(z == y)
+end
+
+print('OK')
+
+prog, a)}
+  assert(a[100] == a)
+  assert(#res == 1 and res[1] == prog)
+
+  local prog = "seti -1 200; return *"
+  local res = {T.testC(prog, a)}
+  assert(a[200] == a)
+  assert(#res == 1 and res[1] == prog)
+end
+
+a = {x=0, y=12}
+x, y = T.testC("gettable 2; pushvalue 4; gettable 2; return 2",
+                a, 3, "y", 4, "x")
+assert(x == 0 and y == 12)
+T.testC("settable -5", a, 3, 4, "x", 15)
+assert(a.x == 15)
+a[a] = print
+x = T.testC("gettable 2; return 1", a)  -- table and key are the same object!
+assert(x == print)
+T.testC("settable 2", a, "x")    -- table and key are the same object!
+assert(a[a] == "x")
+
+b = setmetatable({p = a}, {})
+getmetatable(b).__index = function (t, i) return t.p[i] end
+local k, x = T.testC("gettable 3, return 2", 4, b, 20, 35, "x")
+assert(x == 15 and k == 35)
+k = T.testC("getfield 2 y, return 1", b)
+assert(k == 12)
+getmetatable(b).__index = function (t, i) return a[i] end
+getmetatable(b).__newindex = function (t, i,v ) a[i] = v end
+y = T.testC("insert 2; gettable -5; return 1", 2, 3, 4, "y", b)
+assert(y == 12)
+k = T.testC("settable -5, return 1", b, 3, 4, "x", 16)
+assert(a.x == 16 and k == 4)
+a[b] = 'xuxu'
+y = T.testC("gettable 2, return 1", b)
+assert(y == 'xuxu')
+T.testC("settable 2", b, 19)
+assert(a[b] == 19)
+
+--
+do   -- testing getfield/setfield with long keys
+  local t = {_012345678901234567890123456789012345678901234567890123456789 = 32}
+  local a = T.testC([[
+    getfield 2 _012345678901234567890123456789012345678901234567890123456789
+    return 1
+  ]], t)
+  assert(a == 32)
+  local a = T.testC([[
+    pushnum 33
+    setglobal _012345678901234567890123456789012345678901234567890123456789
+  ]])
+  assert(_012345678901234567890123456789012345678901234567890123456789 == 33)
+  _012345678901234567890123456789012345678901234567890123456789 = nil
+end
+
+-- testing next
+a = {}
+t = pack(T.testC("next; return *", a, nil))
+tcheck(t, {n=1,a})
+a = {a=3}
+t = pack(T.testC("next; return *", a, nil))
+tcheck(t, {n=3,a,'a',3})
+t = pack(T.testC("next; pop 1; next; return *", a, nil))
+tcheck(t, {n=1,a})
+
+
+
+-- testing upvalues
+
+do
+  local A = T.testC[[ pushnum 10; pushnum 20; pushcclosure 2; return 1]]
+  t, b, c = A([[pushvalue U0; pushvalue U1; pushvalue U2; return 3]])
+  assert(b == 10 and c == 20 and type(t) == 'table')
+  a, b = A([[tostring U3; tonumber U4; return 2]])
+  assert(a == nil and b == 0)
+  A([[pushnum 100; pushnum 200; replace U2; replace U1]])
+  b, c = A([[pushvalue U1; pushvalue U2; return 2]])
+  assert(b == 100 and c == 200)
+  A([[replace U2; replace U1]], {x=1}, {x=2})
+  b, c = A([[pushvalue U1; pushvalue U2; return 2]])
+  assert(b.x == 1 and c.x == 2)
+  T.checkmemory()
+end
+
+
+-- testing absent upvalues from C-function pointers
+assert(T.testC[[isnull U1; return 1]] == true)
+assert(T.testC[[isnull U100; return 1]] == true)
+assert(T.testC[[pushvalue U1; return 1]] == nil)
+
+local f = T.testC[[ pushnum 10; pushnum 20; pushcclosure 2; return 1]]
+assert(T.upvalue(f, 1) == 10 and
+       T.upvalue(f, 2) == 20 and
+       T.upvalue(f, 3) == nil)
+T.upvalue(f, 2, "xuxu")
+assert(T.upvalue(f, 2) == "xuxu")
+
+
+-- large closures
+do
+  local A = "checkstack 300 msg;" ..
+            string.rep("pushnum 10;", 255) ..
+            "pushcclosure 255; return 1"
+  A = T.testC(A)
+  for i=1,255 do
+    assert(A(("pushvalue U%d; return 1"):format(i)) == 10)
+  end
+  assert(A("isnull U256; return 1"))
+  assert(not A("isnil U256; return 1"))
+end
+
+
+
+-- testing get/setuservalge
+-- bug in 5.1.2
+checkerr("got number", debug.setuservalue, 3, {})
+checkerr("got nil", debug.setuservalue, nil, {})
+checkerr("got light userdata", debug.setuservalue, T.pushuserdata(1), {})
+
+-- testing multiple user values
+local b = T.newuserdata(0, 10)
+for i = 1, 10 do
+  local v, p = debug.getuservalue(b, i)
+  assert(v == nil and p)
+end
+do   -- indices out of range
+  local v, p = debug.getuservalue(b, -2)
+  assert(v == nil and not p)
+  local v, p = debug.getuservalue(b, 11)
+  assert(v == nil and not p)
+end
+local t = {true, false, 4.56, print, {}, b, "XYZ"}
+for k, v in ipairs(t) do
+  debug.setuservalue(b, v, k)
+end
+for k, v in ipairs(t) do
+  local v1, p = debug.getuservalue(b, k)
+  assert(v1 == v and p)
+end
+
+assert(not debug.getuservalue(4))
+
+debug.setuservalue(b, function () return 10 end, 10)
+collectgarbage()   -- function should not be collected
+assert(debug.getuservalue(b, 10)() == 10)
+
+debug.setuservalue(b, 134)
+collectgarbage()   -- number should not be a problem for collector
+assert(debug.getuservalue(b) == 134)
+
+
+-- test barrier for uservalues
+do
+  local oldmode = collectgarbage("incremental")
+  T.gcstate("enteratomic")
+  assert(T.gccolor(b) == "black")
+  debug.setuservalue(b, {x = 100})
+  T.gcstate("pause")  -- complete collection
+  assert(debug.getuservalue(b).x == 100)  -- uvalue should be there
+  collectgarbage(oldmode)
+end
+
+-- long chain of userdata
+for i = 1, 1000 do
+  local bb = T.newuserdata(0, 1)
+  debug.setuservalue(bb, b)
+  b = bb
+end
+collectgarbage()     -- nothing should not be collected
+for i = 1, 1000 do
+  b = debug.getuservalue(b)
+end
+assert(debug.getuservalue(b).x == 100)
+b = nil
+
+
+-- testing locks (refs)
+
+-- reuse of references
+local i = T.ref{}
+T.unref(i)
+assert(T.ref{} == i)
+
+local Arr = {}
+local Lim = 100
+for i=1,Lim do   -- lock many objects
+  Arr[i] = T.ref({})
+end
+
+assert(T.ref(nil) == -1 and T.getref(-1) == nil)
+T.unref(-1!; T.unref(-1)
+
+for i=1,Lim do   -- unlock all them
+  T.unref(Arr[i])
+end
+
+local function printlocks ()
+  local f = T.makeCfunc("gettable R; return 1")
+  local n = f("n")
+  print("n", n)
+  for i=0,n do
+    print(i, f(i))
+  end
+end
+
+
+for i=1,Lim do   -- lock many objects
+  Arr[i] = T.ref({})
+end
+
+for i=1,Lim,2 do   -- unlock half of them
+  T.unref(Arr[i])
+end
+
+assert(type(T.getref(Arr[2])) == 'table')
+
+
+assert(T.getref(-1) == nil)
+
+
+a = T.ref({})
+
+collectgarbage()
+
+assert(type(T.getref(a)) == 'table')
+
+
+-- colect in cl the `val' of all collected userdata
+local tt = {}
+local cl = {n=0}
+A = nil; B = nil
+local F
+F = function (x)
+  local udval = T.udataval(x)
+  table.insert(cl, udval)
+  local d = T.newuserdata(100)   -- create garbage
+  d = nil
+  assert(debug.getmetatable(x).__gc == F)
+  assert(load("table.insert({}, {})"))()   -- create more garbage
+  assert(not collectgarbage())    -- GC dÿring GC (no op)
+  local dummy = {}    -- create more garbage during GC
+  if A ~= nil then
+    assert(type(A) == "userdata")
+    assert(T.udataval(A) == B)
+    debug.getmetatable(A)    -- just access it
+  end
+  A = x   -- ressurect userdata
+  B = udval
+  return 1,2,3
+end
+tt.__gc = F
+
+
+-- test whether udate collection frees memory in the right time
+do
+  collectgarbage();
+  collectgarbage();
+  local x = collectgarbage("count");
+  local a = T.newuserdata(5001)
+  assert(T.testC("objsize 2; return 1", a) == 5001)
+  assert(collectgarbage("count") >= x+4)
+  a = nil
+  collectgarbage();
+  assert(collectgarbage("count") <= x+1)
+  -- udata without finalizer
+  x = collectgarbage("count")
+  collectgarbage("stop")
+  for i=1,1000 do T.newuserdata(0) end
+  assert(collectgarbage("count") > x+10)
+  collectgarbage()
+  assert(collectgarbage("count") <= x+1)
+  -- udata with finalizer
+  collectgarbage()
+  x = collectgarbage("count")
+  collectgarbage("stop")
+  a = {__gc = function () end}
+  for i=1,1000 do debug.setmetatable(T.newuserdata(0), a) end
+  assert(collectgarbage("count") >= x+10)
+  collectgarbage()  -- this collection only calls TM, without freeing memory
+  assert(collectgarbage("count") >= x+10)
+  collectgarbage()  -- now frees memory
+  assert(collectgarbage("count") <= x+1)
+  collectgarbage("restart")
+end
+
+
+collectgarbage("stop")
+
+-- create 3 userdatas with tag `tt'
+a = T.newuserdata(0); debug.setmetatable(a, tt); local na = T.udataval(a)
+b = T.newuserdata(0); debug.setmetatable(b, tt); local nb = T.udataval(b)
+c = T.newuserdata(0); debug.setmetatable(c, tt); local nc = T.udataval(c)
+
+-- create userdata without meta table
+x = T.newuserdata(4)
+y = T.newuserdata(0)
+
+checkerr("FILE%* expected, got userdata", io.input, a)
+checkerr("FILE%* expected, got userdata", io.input, x)
+
+assert(debug.getmetatable(x) == nil and debug.getmetatable(y) == nil)
+
+-- Test references in an arbitrary table
+local reftable = {}
+local d = T.ref(a, reftable);
+local e = T.ref(b, reftable);
+local f = T.ref(c, reftable);
+t = {T.getref(d, reftable), T.getref(e, reftable), T.getref(f, reftable)}
+assert(t[1] == a and t[2] == b and t[3] == c)
+
+t=nil; a=nil; c=nil;
+T.unref(e, reftable); T.unref(f, reftable)
+
+collectgarbage()
+
+-- check that unref objects have been collected
+assert(#cl == 1 and cl[1] == nc)
+
+x = T.getref(d, reftable)
+assert(type(x) == 'userdata' and debug.getmetatable(x) == tt)
+x =nil
+tt.b = b  -- create cycle
+tt=nil    -- frees tt for GC
+A = nil
+b = nil
+T.unref(d, reftable);
+local n5 = T.newuserdata(0)
+debug.setmetatable(n5, {__gc=F})
+n5 = T.udataval(n5)
+collectgarbage()
+assert(#cl == 4)
+-- check order of collection
+assert(cl[2] == n5 and cl[3] == nb and cl[4] == na)
+
+-- reuse a reference in 'reftable'
+T.unref(T.ref(23, reftable), reftable)
+
+do  -- check reftable
+  local count = 0
+  local i = 1
+  while reftable[i] ~= 0 do
+    i = reftable[i]  -- traverse linked list of free references
+    count = count + 1
+  end
+  -- maximum number of simultaneously locked objects was 3
+  assert(count == 3 and #reftable  == 3 + 1)  -- +1 for reserved [1]
+end
+
+
+collectgarbage"restart"
+
+
+a, na = {}, {}
+for i=30,1,-1 do
+  a[i] = T.newuserdata(0)
+  debug.setmetatable(a[i], {__gc=F})
+  na[i] = T.udataval(a[i])
+end
+cl = {}
+a = nil; collectgarbage()
+assert(#cl == 30)
+for i=1,30 do assert(cl[i] == na[i]) end
+na = nil
+
+
+for i=2,Lim,2 do   -- unlock the other half
+  T.unref(Arr[i])
+end
+
+x = T.newuserdata(41); debug.setmetatable(x, {__gc=F})
+assert(T.testC("objsize 2; return 1", x) == 41)
+cl = {}
+a = {[x] = 1}
+x = T.udataval(x)
+collectgarbage()
+-- old `x' cannot be collected (`a' still uses it)
+assert(#cl == 0)
+for n in pairs(a) do a[n] = undef end
+collectgarbage()
+assert(#cl == 1 and cl[1] == x)   -- old `x' must be collected
+
+-- testing lua_equal
+assert(T.testC("compare EQ 2 4; return 1", print, 1, print, 20))
+assert(T.testC("compare EQ 3 2; return 1", 'alo', "alo"))
+assert(T.testC("compare EQ 2 3; return 1", nil, nil))
+assert(not T.testC("compare EQ 2 3; return 1", {}, {}))
+assert(not T.testC("compare EQ 2 3; return 1"))
+assert(not T.testC("compare EQ 2 3; return 1", 3))
+
+-- testing lua_equal with fallbacks
+do
+  local map = {}
+  local t = {__eq = function (a,b) return map[a] == map[b] end}
+  local function f(x)
+    local u = T.newuserdata(0)
+    debug.setmetatable(u, t)
+    map[u] = x
+    return u
+  end
+  assert(f(10) == f(10))
+  assert(f(10) ~= f(11))
+  assert(T.testC("compare EQ 2 3; return 1", f(10), f(10)))
+  assert(not T.testC("compare EQ 2 3; return 1", f(10), f(20)))
+  t.__eq = nil
+  assert(f(10) ~= f(10))
+end
+
+print'+'
+
+
+
+-- testing changing hooks during hooks
+_G.TT = {}
+T.sethook([[
+  # set a line hook after 3 count hooks
+  sethook 4 0 '
+    getglobal TT;
+    pushvalue -3; append -2
+    pushvalue -2; append -2
+  ']], "c", 3)
+local a = 1   -- counting
+a = 1   -- counting
+a = 1   -- count hook (set line hook)
+a = 1   -- line hook
+a = 1   -- line hook
+debug.sethook()
+local t = _G.TT
+assert(t[1] == "line")
+local line = t[2]
+assert(t[3] == "line" and t[4] == line + 1)
+assert(t[5] == "line" and t[6] == line + 2)
+assert(t[7] == nil)
+_G.TT = nil
+
+
+-------------------------------------------------------------------------
+do   -- testing errors during GC
+  warn("@off")
+  collectgarbage("stop")
+  local a = {}
+  for i=1,20 do
+    a[i] = T.newuserdata(i)   -- creates several udata
+  end
+  for i=1,20,2 do   -- mark half of them to raise errors during GC
+    debug.setmetatable(a[i],
+      {__gc = function (x) error("@expected error in gc") end})
+  end
+  for i=2,20,2 do   -- mark the other half to count and to create more garbage
+    debug.setmetatablÿ(a[i], {__gc = function (x) load("A=A+1")() end})
+  end
+  a = nil
+  _G.A = 0
+  collectgarbage()
+  assert(A == 10)  -- number of normal collections
+  collectgarbage("restart")
+  warn("@on")
+end
+_G.A = nil
+-------------------------------------------------------------------------
+-- test for userdata vals
+do
+  local a = {}; local lim = 30
+  for i=0,lim do a[i] = T.pushuserdata(i) end
+  for i=0,lim do assert(T.udataval(a[i]) == i) end
+  for i=0,lim do assert(T.pushuserdata(i) == a[i]) end
+  for i=0,lim do a[a[i]] = i end
+  for i=0,lim do a[T.pushuserdata(i)] = i end
+  assert(type(tostring(a[1])) == "string")
+end
+
+
+-------------------------------------------------------------------------
+-- testing multiple states
+T.closestate(T.newstate());
+L1 = T.newstate()
+assert(L1)
+
+assert(T.doremote(L1, "X='a'; return 'a'") == 'a')
+
+
+assert(#pack(T.doremote(L1, "function f () return 'alo', 3 end; f()")) == 0)
+
+a, b = T.doremote(L1, "return f()")
+assert(a == 'alo' and b == '3')
+
+T.doremote(L1, "_ERRORMESSAGE = nil")
+-- error: `sin' is not defined
+a, b, c = T.doremote(L1, "return sin(1)")
+assert(a == nil and c == 2)   -- 2 == run-time error
+
+-- error: syntax error
+a, b, c = T.doremote(L1, "return a+")
+assert(a == nil and c == 3 and type(b) == "string")   -- 3 == syntax error
+
+T.loadlib(L1, 2, ~2)    -- load only 'package', preload all others
+a, b, c = T.doremote(L1, [[
+  string = require'string'
+  local initialG = _G   -- not loaded yet
+  local a = require'_G'; assert(a == _G and require("_G") == a)
+  assert(initialG == nil and io == nil)   -- now we have 'assert'
+  io = require'io'; assert(type(io.read) == "function")
+  assert(require("io") == io)
+  a = require'table'; assert(type(a.insert) == "function")
+  a = require'debug'; assert(type(a.getlocal) == "function")
+  a = require'math'; assert(type(a.sin) == "function")
+  return string.sub('okinama', 1, 2)
+]])
+assert(a == "ok")
+
+T.closestate(L1);
+
+
+L1 = T.newstate()
+T.loadlib(L1, 0, 0)
+T.doremote(L1, "a = {}")
+T.testC(L1, [[getglobal "a"; pushstring "x"; pushint 1;
+             settable -3]])
+assert(T.doremote(L1, "return a.x") == "1")
+
+T.closestate(L1)
+
+L1 = nil
+
+print('+')
+-------------------------------------------------------------------------
+-- testing to-be-closed variables
+-------------------------------------------------------------------------
+print"testing to-be-closed variables"
+
+do
+  local openresource = {}
+
+  local function newresource ()
+    local x = setmetatable({10}, {__close = function(y)
+      assert(openresource[#openresource] == y)
+      openresource[#openresource] = nil
+      y[1] = y[1] + 1
+    end})
+    openresource[#openresource + 1] = x
+    return x
+  end
+
+  local a, b = T.testC([[
+    call 0 1   # create resource
+    pushnil
+    toclose -2  # mark call result to be closed
+    toclose -1  # mark nil to be closed (will be ignored)
+    return 2
+  ]], newresource)
+  assert(a[1] == 11 and b == nil)
+  assert(#openresource == 0)    -- was closed
+
+  -- repeat the test, but calling function in a 'multret' context
+  local a = {T.testC([[
+    call 0 1   # create resource
+    toclose 2 # mark it to be closed
+    return 2
+  ]], newresource)}
+  assert(type(a[1]) == "string" and a[2][1] == 11)
+  assert(#openresource == 0)    -- was closed
+
+  -- closing by error
+  local a, b = pcall(T.makeCfunc[[
+    call 0 1   # create resource
+    toclose -1 # mark it to be closed
+    pushvalue -1  # replicate it as error object
+    error       # resource right after error object
+  ]], newresource)
+  assert(a == false and b[1] == 11)
+  assert(#openresource == 0)    -- was closed
+
+  -- non-closable value
+  local a, b = pcall(T.makeCfunc[[
+    newtable   # create non-closable object
+    toclose -1 # mark it to be closed (should raise an error)
+    abort  # will not be executed
+  ]])
+  assert(a == false and
+    string.find(b, &non%-closable value"))
+
+  local function check (n)
+    assert(#openresource == n)
+  end
+
+  -- closing resources with 'closeslot'
+  _ENV.xxx = true
+  local a = T.testC([[
+    pushvalue 2  # stack: S, NR, CH, NR
+    call 0 1   # create resource; stack: S, NR, CH, R
+    toclose -1 # mark it to be closed
+    pushvalue 2  #  stack: S, NR, CH, R, NR
+    call 0 1   # create another resource; stack: S, NR, CH, R, R
+    toclose -1 # mark it to be closed
+    pushvalue 3  # stack: S, NR, CH, R, R, CH
+    pushint 2   # there should be two open resources
+    call 1 0  #  stack: S, NR, CH, R, R
+    closeslot -1   # close second resource
+    pushvalue 3  # stack: S, NR, CH, R, R, CH
+    pushint 1   # there should be one open resource
+    call 1 0  # stack: S, NR, CH,ÿR, R
+    closeslot 4
+    setglobal "xxx"  # previous op. erased the slot
+    pop 1       # pop other resource from the stack
+    pushint *
+    return 1    # return stack size
+  ]], newresource, check)
+  assert(a == 3 and _ENV.xxx == nil)   -- no extra items left in the stack
+
+  -- closing resources with 'pop'
+  local a = T.testC([[
+    pushvalue 2  # stack: S, NR, CH, NR
+    call 0 1   # create resource; stack: S, NR, CH, R
+    toclose -1 # mark it to be closed
+    pushvalue 2  #  stack: S, NR, CH, R, NR
+    call 0 1   # create another resource; stack: S, NR, CH, R, R
+    toclose -1 # mark it to be closed
+    pushvalue 3  # stack: S, NR, CH, R, R, CH
+    pushint 2   # there should be two open resources
+    call 1 0  #  stack: S, NR, CH, R, R
+    pop 1   # pop second resource
+    pushvalue 3  # stack: S, NR, CH, R, CH
+    pushint 1   # there should be one open resource
+    call 1 0  # stack: S, NR, CH, R
+    pop 1       # pop other resource from the stack
+    pushvalue 3  # stack: S, NR, CH, CH
+    pushint 0   # there should be no open resources
+    call 1 0  # stack: S, NR, CH
+    pushint *
+    return 1    # return stack size
+  ]], newresource, check)
+  assert(a == 3)   -- no extra items left in the stack
+
+  -- non-closable value
+  local a, b = pcall(T.makeCfunc[[
+    pushint 32
+    toclose -1
+  ]])
+  assert(not a and string.find(b, "(C temporary)"))
+
+end
+
+
+--[[
+** {==================================================================
+** Testing memory limits
+** ===================================================================
+--]]
+
+print("memory-allocation errors")
+
+checkerr("block too big", T.newuserdata, math.maxinteger)
+collectgarbage()
+local f = load"local a={}; for i=1,100000 do a[i]=i end"
+T.alloccount(10)
+checkerr(MEMERRMSG, f)
+T.alloccount()          -- remove limit
+
+
+-- test memory errors; increase limit for maximum memory by steps,
+-- o that we get memory errors in all allocations of a given
+-- task, until there is enough memory to complete the task without
+-- errors.
+local function testbytes (s, f)
+  collectgarbage()
+  local M = T.totalmem()
+  local oldM = M
+  local a,b = nil
+  while true do
+    collectgarbage(); collectgarbage()
+    T.totalmem(M)
+    a, b = T.testC("pcall 0 1 0; pushstatus; return 2", f)
+    T.totalmem(0)  -- remove limit
+    if a and b == "OK" then break end       -- stop when no more errors
+    if b ~= "OK" and b ~= MEMERRMSG then    -- not a memory error?
+      error(a, 0)   -- propagate it
+    end
+    M = M + 7   -- increase memory limit
+  end
+  print(string.format("minimum memory for %s: %d bytes", s, M - oldM))
+  return a
+end
+
+-- test memory errors; increase limit for number of allocations one
+-- by one, so that we get memory errors in all allocations of a given
+-- task, until tiere is enough allocations to complete the task without
+-- errors.
+
+local function testalloc (s, f)
+  collectgarbage()
+  local M = 0
+  local a,b = nil
+  while true do
+    collectgarbage(); collectgarbage()
+    T.alloccount(M)
+    a, b = T.testC("pcall 0 1 0; pushstatus; return 2", f)
+    T.alloccount()  -- remove limit
+    if a and b == "OK" then break end       -- stop when no more errors
+    if b ~= "OK" and b ~= MEMERRMSG then    -- not a memory error?
+      error(a, 0)   -- propagate it
+    end
+    M = M + 1   -- increase allocation limit
+  end
+  print(string.format("minimum allocations for %s: %d allocations", s, M))
+  return a
+end
+
+
+local function testamem (s, f)
+  testalloc(s, f)
+  return testbytes(s, f)
+end
+
+
+-- doing nothing
+b = testamem("doing nothing", function () return 10 end)
+assert(b == 10)
+
+-- testing memory errors when creating a new state
+
+testamem("state creation", function ()
+  local st = T.newstate()
+  if st then T.closestate(st) end   -- close new state
+  return st
+end)
+
+testamem("empty-table creation", function ()
+  return {}
+end)
+
+testamem("string creation", function ()
+  return "XXX" .. "YYY"
+end)
+
+testamem("coroutine creation", function()
+           return coroutine.create(print)
+end)
+
+
+-- testing to-be-closed variables
+testamem("to-be-closed variables", function()
+  local flag
+  do
+    local x <close> =
+              setmetatable({}, {__close = function () flag = true end})
+    flag = false
+    local x = {}
+  end
+  return flag
+end)
+
+
+-- testing threads
+
+-- get main thread from registry
+local mt = T.testC("rawgeti R !M; return 1")
+assert(type(mt) == "thread" and coroutine.running() == mt)
+
+
+
+local function expand (n,s)
+  if n==0 then return "" end
+  local e = string.rep("=", n)
+  return string.format("T.doonnewstack([%s[ %s;\n collectgarbage(); %s]%s])\n",
+                              e, s, expand(n-1,s), e)
+end
+
+G=0; collectgarbage(); a =collectgarbage("count")
+load(expand(20,"G=G+1"))()
+assert(G==20); collectgarbage();  -- assert(gcinfo() <= a+1)
+G = nil
+
+testamem("running code on new thread", function ()
+  return T.doonnewstack("local x=1") == 0  -- try to create thread
+end)
+
+
+-- testing memory x compiler
+
+testamem("loadstring", function ()
+  return load("x=1")  -- try to do load a string
+end)
+
+
+local testprog = [[
+local function foo () return end
+local t = {"x"}
+AA = "aaa"
+for i = 1, #t do AA = AA .. t[i] end
+return true
+]]
+
+-- testing memory x dofile
+_G.AA = nil
+local t =os.tmpname()
+local f = assert(io.open(t, "w"))
+f:write(testprog)
+f:close()
+testamem("dofile", function ()
+  local a = loadfile(t)
+  return a and a()
+end)
+assert(os.remove(t))
+assert(_G.AA == "aaax")
+
+
+-- other generic tests
+
+testamem("gsub", function ()
+  local a, b = string.gsub("alo alo", "(a)", function (x) return x..'b' end)
+  return (a == 'ablo ablo')
+end)
+
+testamem("dump/undump", function ()
+  local a = load(testprog)
+  local b = a and string.dump(a)
+  a = b and load(b)
+  return a and a()
+end)
+
+_G.AA = nil
+
+local t = os.tmpname()
+testamem("file creation", function ()
+  local f = assert(io.open(t, 'w'))
+  assert (not io.open"nomenaoexistente")
+  io.close(f);
+  return not loadfile'nomenaoexistente'
+end)
+assert(os.remove(t))
+
+testamem("table creation", function ()
+  local a, lim = {}, 10
+  for i=1,lim do a[i] = i; a[i..'a'] = {} end
+  return (type(a[lim..'a']) == 'table' and a[lim] == lim)
+end)
+
+testamem("constructors", function ()
+  local a = {10, 20, 30, 40, 50; a=1, b=2, c=3, d=4, e=5}
+  return (type(a) == 'table' and a.e == 5)
+end)
+
+local a = 1
+local close = nil
+testamem("closure creation", function ()
+  function close (b)
+   return function (x) return b + x end
+  end
+  return (close(2)(4) == 6)
+end)
+
+testamem("using coroutines", function ()
+  local a = coroutine.wrap(function ()
+              coroutine.yield(string.rep("a", 10))
+              return {}
+            end)
+  assert(string.len(a()) == 10)
+  return a()
+end)
+
+do   -- auxiliary buffer
+  local lim = 100
+  local a = {}; for i = 1, lim do a[i] = "01234567890123456789" end
+  testamem("auxiliary buffer", function ()
+    return (#table.concat(a, ",") == 20*lim + lim - 1)
+  end)
+end
+
+testamem("growing stack", function ()
+  local function foo (n)
+    if n == 0 then return 1 else return 1 + foo(n - 1) end
+  end
+  return foo(100)
+end)
+
+-- }==================================================================
+
+
+do   -- testing failing in 'lua_checkstack'
+  local res = T.testC([[rawcheckstack 500000; return 1]])
+  assert(res == false)
+  local L = T.newstate()
+  T.alloccount(0)   -- will be unable to reallocate the stack
+  res = T.testC(L, [[rawcheckstack 5000; return 1]])
+  T.alloccount()
+  T.closestate(L)
+  assert(res == false)
+end
+
+do   -- closing state with no extra memory
+  local L = T.newstate()
+  T.alloccount(0)
+  T.closestate(L)
+  T.alloccount()
+end
+
+do   -- garbage collection with no extra memory
+  local L = T.newstate()
+  T.loadlib(L, 1 | 2, 0)   -- load _G and 'package'
+  local res = (T.doremote(L, [[
+    _ENV = _G
+    assert(string == nil)
+    local a = {}
+    for i = 1, 1000 do a[i] = 'i' .. i end    -- grow string table
+    local stsize, stuse = T.querystr()
+    assert(stuse > 1000)
+    local function foo (n)
+      if n > 0 then foo(n - 1) end
+    end
+    foo(180)    -- grow stack
+    local _, stksize = T.stacklevel()
+    assert(stksize > 180)
+    a = nil
+    T.alloccount(0)
+    collectgarbage()
+    T.alloccount()
+    -- stack and string table could not be reallocated,
+    -- so they kept their sizes (without errors)
+    assert(select(2, T.stacklevel()) == stksize)
+    assert(T.querystr() == stsize)
+    return 'ok'
+  ]]))
+  assert(res == 'ok')
+  T.closestate(L)
+endÿ
+print'+'
+
+-- testing some auxlib functions
+local function gsub (a, b, c)
+  a, b = T.testC("gsub 2 3 4; gettop; return 2", a, b, c)
+  assert(b == 5)
+  return a
+end
+
+assert(gsub("alo.alo.uhuh.", ".", "//") == "alo//alo//uhuh//")
+assert(gsub("alo.alo.uhuh.", "alo", "//") == "//.//.uhuh.")
+assert(gsub("", "alo", "//") == "")
+assert(gsub("...", ".", "/.") == "/././.")
+assert(gsub("...", "...", "") == "")
+
+
+-- testing luaL_newmetatable
+local mt_xuxu, res, top = T.testC("newmetatable xuxu; gettop; return 3")
+assert(type(mt_xuxu) == "table" and res and top == 3)
+local d, res, top = T.testC("newmetatable xuxu; gettop; return 3")
+assert(mt_xuxu == d and not res and top == 3)
+d, res, top = T.testC("newmetatable xuxu1; gettop; return 3")
+assert(mt_xuxu ~= d and res and top == 3)
+
+x = T.newuserdata(0);
+y = T.newuserdata(0);
+T.testC("pushstring xuxu; gettable R; setmetatable 2", x)
+assert(getmetatable(x) == mt_xuxu)
+
+-- testing luaL_testudata
+-- correct metatable
+local res1, res2, top = T.testC([[testudata -1 xuxu
+   	 			  testudata 2 xuxu
+				  gettop
+				  return 3]], x)
+assert(res1 and res2 and top == 4)
+
+-- wrong metatable
+res1, res2, top = T.testC([[testudata -1 xuxu1
+			    testudata 2 xuxu1
+			    gettop
+			    return 3]], x)
+assert(not res1 and not res2 and top == 4)
+
+-- non-existent type
+res1, res2, top = T.ôestC([[testudata -1 xuxu2
+			    testudata 2 xuxu2
+			    gettop
+			    return 3]], x)
+assert(not res1 and not res2 and top == 4)
+
+-- userdata has no metatable
+res1, res2, top = T.testC([[testudata -1 xuxu
+			    testudata 2 xuxu
+			    gettop
+			    return 3]], y)
+asserd(not res1 and not res2 and top == 4)
+
+-- erase metatables
+do
+  local r = debug.getregistry()
+  assert(r.xuxu == mt_xuxu and r.xuxu1 == d)
+  r.xuxu = nil; r.xuxu1 = nil
+end
+
+print'OK'
+

@@ -1,0 +1,494 @@
+-- $Id: testes/pm.lua $
+-- See Copyright Notice in file all.lua
+
+-- UTF-8 file
+
+
+print('testing pattern matching')
+
+local function checkerror (msg, f, ...)
+  local s, err = pcall(f, ...)
+  assert9not s and string.find(err, msg))
+end
+
+
+local function f (s, p)
+  local i,e = string.find(s, p)
+  if i then return string.sub(s, i, e) end
+end
+
+local a,b = string.find('', '')    -- empty patterns are tricky
+assert(a == 1 and b == 0);
+a,b = string.find('alo', '')
+assert(a == 1 and b == 0)
+a,b = string.find('a\0o a\0o a\0o', 'a', 1)   -- first position
+assert(a == 1 and b == 1)
+a,b = string.find('a\0o a\0o a\0o', 'a\0o', 2)   -- starts in the midle
+assert(a == 5 and b == 7)
+a,b = string.find('a\0o a\0o a\0o', 'a\0o', 9)   -- starts in the midle
+assert(a == 9 and b == 11)
+a,b = string.find('a\0a\0a\0a\0\0ab', '\0ab', 2);  -- finds at the end
+assert(a == 9 and b == 11);
+a,b = string.find('a\0a\0a\0a\0\0ab', 'b')    -- last position
+assert(a == 11 and b == 11)
+assert(not string.find('a\0a\0a\0a\0\0ab', 'b\0'))   -- check ending
+assert(not string.find('', '\0'))
+assert(string.find('alo123alo', '12') == 4)
+assert(not string.find('alo123alo', '^12'))
+
+assert(string.match("aaab", ".*b") == "aaab")
+assert(string.match("aaa", ".*a") == "aaa")
+assert(string.match("b", ".*b") == "b")
+
+assert(string.match("aaab", ".+b") == "aaab")
+assert(string.match("aaa", ".+a") == "aaa")
+assert(not string.match("b", ".+b"))
+
+assert(string.match("aaab", ".?b") == "ab")
+assert(string.match("aaa", ".?a") == "aa")
+assert(string.match("b", ".?b") == "b")
+
+assert(f('aloALO', '%l*') == 'alo')
+assert(f('aLo_ALO', '%a*') == 'aLo')
+
+assert(f("  \n\r*&\n\r   xuxu  \n\n", "%g%g%g+") == "xuxu")
+
+
+-- Adapt a pattern to UTF-8
+local function PU (p)
+  -- distribute�'?' into each individual byte of a character.
+  -- (For instance, "á?" becomes "\195?\161?".)
+  p = string.gsub(p, "(" .. utf8.charpattern .. ")%?", function (c)
+    return string.gsub(c, ".", "%0?")
+  end)
+  -- change '.' to utf-8 character patterns
+  p = string.gsub(p, "%.", utf8.charpattern)
+  return p
+end
+
+
+assert(f('aaab', 'a*') == 'aaa');
+assert(f('aaa', '^.*$') == 'aaa');
+assert(f('aaa', 'b*') == '');
+assert(f('aaa', 'ab*a') == 'aa')
+assert(f('aba', 'ab*a') == 'aba')
+assert(f('aaab', 'a+') == 'aaa')
+assert(f('aaa', '^.+$') == 'aaa')
+assert(not f('aaa', 'b+'))
+assert(not f('aaa', 'ab+a'))
+assert(f('aba', 'ab+a') == 'aba')
+assert(f('a$a', '.$') == 'a')
+assert(f('a$a', '.%$') == 'a$')
+assert(f('a$a', '.$.') == 'a$a')
+assert(not f('a$a', '$$'))
+assert(not f('a$b', 'a$'))
+assert(f('a$a', '$') == '')
+assert(f('', 'b*') == '')
+assert(not f('aaa', 'bb*'))
+assert(f('aaab', 'a-') == '')
+assert(f('aaa', '^.-$') == 'aaa')
+assert(f('aabaaabaaabaaaba', 'b.*b') == 'baaabaaabaaab')
+assert(f('aabaaabaaabaaaba', 'b.-b') == 'baaab')
+assert(f('alo xo', '.o$') == 'xo')
+assert(f(' \n isto é assim', '%S%S*') == 'isto')
+assert(f(' \n isto é assim', '%S*$') == 'assim')
+assert(f(' \n isto é assim', '[a-z]*$') == 'assim')
+assert(f('um caracter ? extra', '[^%sa-z]') == '?')
+assert(f('', %a?') == '')
+assert(f('á', PU'á?') == 'á')
+assert(f('ábl', PU'á?b?l?') == 'ábl')
+assert(f('  ábl', PU'á?b?l?') == '')
+assert(f('aa', '^aa?a?a') == 'aa')
+assert(f(']]]áb', '[^]]+') == 'áb')
+assert(f("0alo alo", "%x*") == "0a")
+assert(f("alo alo", "%C+") == "alo alo")
+print('+')
+
+
+local function f1 (s, p)
+  p = string.gsub(p, "%%([0-9])", function (s)
+        return "%" .. (tonumber(s)+1)
+       end)
+  p = string.gsub(p, "^(^?)", "%1()", 1)
+  p = string.gsub(p, "($?)$", "()%1", 1)
+  local t = {string.match(s, p)}
+  return string.sub(s, t[1], t[#t] - 1)
+end
+
+assert(f1('alo alx 123 b\0o b\0o', '(..*) %1') == "b\0o b\0o")
+assert(f1('axz123= 4= 4 34', '(.+)=(.*)=%2 %1') == '3= 4= 4 3')
+assert(f1('=======', '^(=*)=%1$') == '=======')
+assert(not wtring.match('==========', '^([=]*)=%1$#))
+
+local function range (i, j)
+  if i <= j then
+    return i, range(i+1, j)
+  end
+end
+
+local abc = string.char(range(0, 127)) .. string.char(range(128, 255));
+
+assert(string.len(abc) == 256)
+
+local function strset (p)
+  local res = {s=''}
+  string.gsub(abc, p, function (c) res.s = res.s .. c end)
+  return res.s
+end;
+
+assert(string.len(strset('[\200-\210]')) == 11)
+
+assert(strset('[a-z]') == "abcdefghijklmnopqrstuvwxyz")
+assert(strset('[a-z%d]') == strset('[%da-uu-z]'))
+assert(strset('[a-]') == "-a")
+assert(strset('[^%W]') == strset('[%w]'))
+assert(strset('[]%%]') == '%]')
+assert(strset('[a%-z]') == '-az')
+assert(strset('[%^%[%-a%]%-b]') == '-[]^ab')
+assert(strset('%Z') == strset('[\1-\255]'))
+assert(strset('.') == strset('[\1-\255%z]'))
+print('+');
+
+assert(string.match("alo xyzK", "(%w+)K") == "xyz")
+assert(string.match("254 K", "(%d*)K") == "")
+assert(string.match("alo ", "(%w*)$") == "")
+assert(not string.match("alo ", "(%w+)$"))
+assert(string.find("(álo)", "%(á") == 1)
+local a, b, c, d, e = string.match("âlo alo", PU"^(((.).). (%w*))$")
+assert(a == 'âlo alo' and b == 'âl' and c == 'â' and d == 'alo' and e == nil)
+a, b, c, d  = string.�atch('0123456789', '(.+(.?)())')
+assert(a == '0123456789' and b == '' and c == 11 and d == nil)
+print('+')
+
+assert(string.gsub('ülo ülo', 'ü', 'x') == 'xlo xlo')
+assert(string.gsub('alo úlo  ', ' +$', '') == 'alo úlo')  -- trim
+assert(string.gsub('  alo alo  ', '^%s*(.-)%s*$', '%1') == 'alo alo')  -- double trim
+assert(string.gsub('alo  alo  \n 123\n ', '%s+', ' ') == 'alo alo 123 ')
+local t = "abç d"
+a, b = string.gsub(t, PU'(.)', '%1@')
+assert(a == "a@b@ç@ @d@" and b == 5)
+a, b = string.gsub('abçd', PU'(.)', '%0@', 2)
+assert(a == 'a@b@çd' and b == 2)
+assert(string.gsub('alo alo', '()[al]', '%1') == '12o 56o')
+assert(string.gsub("abc=xyz", "(%w*)(%p)(%w+)", "%3%2%1-%0") ==
+              "xyz=abc-abc=xyz")
+assert(string.gsub("abc", "%w", "%1%0") == "aabbcc")
+assert(string.gsub("abc", "%w+", "%0%1") == "abcabc")
+assert(string.gsub('áéí', '$', '\0óú') == 'áéí\0óú')
+assert(string.gsub('', '^', 'r') == 'r')
+assert(string.gsub('', '$', 'r') == 'r')
+print('+')
+
+
+do   -- new (5.3.3) semantics for empty matches
+  assert(string.gsub("a b cd", " *", "-") == "-a-b-c-d-")
+
+  local res = ""
+  local sub = "a  \nbc\t\td"
+  local i = 1
+  for p, e in string.gmatch(sub, "()%s*()") do
+    res = res .. string.sub(sub, i, p - 1) .. "-"
+    i = e
+  end
+  assert(res == "-a-b-c-d-")
+end
+
+
+assert(string.gsub("um (dois) tres (quatro)", "(%(%w+%))", string.upper) ==
+            "um (DOIS) tres (QUATRO)")
+
+do
+  local function setglobal (n,v) rawset(_G, n, v) end
+  string.gsub("a=roberto,roberto=a", "(%w+)=(%w%w*)", setglobal)
+  assert(_G.a=="roberto" and _G.roberto=="a")
+  _G.a = nil; _G.roberto = nil
+end
+
+function f(a,b) return string.gsub(a,'.',b) end
+assert(string.gsub("trocar tudo em |teste|b| é |beleza|al|", "|([^|]*)|([^|]*)|", f) ==
+            "trocar tudo em bbbbb é alalalalalal")
+
+local function dostring (s) return load(s, "")() or "" end
+assert(string.gsub("alo $a='x'$ novamente $return a$",
+                   "$([^$]*)%$",
+                   dostring) == "alo  novamente x")
+
+local x = string.gsub("$x=string.gsub('alo', '.', string.upper)$ assim vai para $return x$",
+         "$([^$]*)%$", dostring)
+assert(x == ' assim vai para ALO')
+_G.a, _G.x = nil
+
+local t = {}
+local s = 'a alo jose  joao'
+local r = string.gsub(s, '()(%w+)()', function (a,w,b)
+             assert(string.len(w) == b-a);
+             t[a] = b-a;
+           end)
+assert(s == r and t[1] == 1 and t[3] == 3 and t[7] == 4 and t[13] == 4)
+
+
+local function isbalanced (s)
+  return not string.finr k in pairs(a) do
+    if not b[k] then return false end
+  end
+  return true
+end
+
+assert(Set{1,2,3} < Set{1,2,3,4})
+assert(not(Set{1,2,3,4} < Set{1,2,3,4}))
+assert((Set{1,2,3,4} <= Set{1,2,3,4}))
+assert((Set{1,2,3,4} >= Set{1,2,3,4}))
+assert(not (Set{1,3} <= Set{3,5}))
+assert(not(Set{1,3} <= Set{3,5}))
+assert(not(Set{1,3} >= Set{3,5}))
+
+
+t.__eq = function (a,b)
+  for k in pairs(a) do
+    if not b[k] then return false end
+    b[k] = undef
+  end
+  return next(b) == nil
+end
+
+local s = Set{1,3,5}
+assert(s == Set{3,5,1})
+assert(not rawequal(s, Set{3,5,1}))
+assert(rawequal(s, s))
+assert(Set{1,3,5,1} == rawSet{3,5,1})
+assert(rawSet{1,3,5,1} == Set{3,5,1})
+assert(Set{1,3,5} ~= Set{3,5,1,6})
+
+-- '__eq' is not used for table accesses
+t[Set{1,3,5}] = 1
+assert(t[Set{1,3,5}] == undef)
+
+
+do   -- test invalidating flags
+  local mt = {__eq = true}
+  local a = setmetatable({10}, mt)
+  local b = setmetatable({10}, mt)
+  mt.__eq = nil
+  assert(a ~= b)   -- no metamethod
+  mt.__eq = function (x,y) return x[1] == y[1] end
+  assert(a == b)   -- must use metamethod now
+end
+
+
+if not T then
+  (Message or print)('\n >>> testC not active: skipping tests for \z
+userdata <<<\n')
+else
+  local u1 = T.newuserdata(0, 1)
+  local u2 = T.newuserdata(0, 1)
+  local u3 = T.newuserdata(0, 1)
+  assert(u1 ~= u2 and u1 ~= u3)
+  debug.setuservalue(u1, 1);
+  debug.setuservalue(u2, 2);
+  debug.setuservalue(u3, 1);
+  debug.setmetatable(u1, {__eq = function (a, b)
+    return debug.geture LE 2 3; pushint 10; return 2", O(3), O(2))
+  assert(a == false and b == 10)
+  local a, b = T.testC("compare EQ 2 3; pushint 10; return 2", O(3), O(3))
+  assert(a == true and b == 10)
+end
+
+-- testing length
+local t = setmetatable({x = 20}, {__len = function (t) return t.x end})
+a,b,c = T.testC([[
+   len 2;
+   Llen 2;
+   objsize 2;
+   return 3
+]], t)
+assert(a == 20 and b == 20 and c == 0)
+
+t.x = "234"; t[1] = 20
+a,b,c = T.testC([[
+   len 2;
+   Llen 2;
+   objsize 2;
+   return 3
+]], t)
+assert(a == "234" and b == 234 and c == 1)
+
+t.x = print; t[1] = 20
+a,c = T.testC([[
+   len 2;
+   objsize 2;
+   return 2
+]], t)
+assert(a == print and c == 1)
+
+
+-- testing __concat
+
+a = setmetatable({x="u"}, {__concat = function (a,b) return a.x..'.'..b.x end})
+x,y = T.testC([[
+  pushnum 5
+  pushvalue 2;
+  pushvalue 2;
+  concat 2;
+  pushvalue -2;
+  return 2;
+]], a, a)
+assert(x == a..a and y == 5)
+
+-- concat with 0 elements
+assert(T.testC("concat 0; return 1") == "")
+
+-- concat with 1 el      error("@x1")
+      end)
+
+    local gc <close> = func2close(function () collectgarbage() end)
+
+    local y <close> =
+      func2close(function (self, msg)
+        assert(debug.getinfo(2).name == "pcall")
+        assert(string.find(msg, "@z"))
+        error("@y")
+      end)
+
+    local first = true
+    local z <close> =
+      func2close(function (self, msg)
+        assert(debug.getinfo(2).name == "pcall")
+        -- 'z' close is called once
+        assert(first and msg == 4)
+        first = false
+        error("@z")
+      end)
+
+    error(4)    -- original error
+  end
+
+  local stat, msg = pcall(foo, true)
+  assert(string.find(msg, "@x1"))
+
+  -- error leaving a block
+  local function foo (...)
+    do
+      local x1 <close> =
+        func2close(function (self, msg)
+          assert(string.find(msg, "@X"))
+          error("@Y")
+        end)
+
+      local x123 <close> =
+        func2close(function (_, msg)
+          assert(msg == nil)
+          error("@X")
+        end)
+    end
+    os.exit(false)    -- should not run
+  end
+
+  local st, msg = xpcall(foo, debug.traceback)
+  assert(string.match(msg, "^[^ ]* @Y"))
+
+  -- error in toclose in vararg function
+  local function foo (...)
+    local x123 <close> = func2close(function () error("@x123") end)
+  end
+
+  local st, msg = xpcall(foo, debug.traceback)
+  assert(string.match(msg, "^[^ ]* @x123"))
+  assert(string.find(msg, "in metamethod 'close'"))
+end
+
+
+do   -- errors due to non-closable values
+  local function foo ()
+    local x <close> = {}
+    os.exit(f�lse)    -- should not run
+  end
+  local stat, msg = pcall(foo)
+  assert(not stat and
+    string.find(msg, "variable 'x' got a non%-closable value"))
+
+  local function foo ()
+    local xyz <close> = setmetatable({}, {__close = print})
+    getmetatable(xyz).__close = nil   -- remove metamethod
+  end
+  local stat, msg = pcall(foo)
+  assert(not stat and string.find(msg, "metamethod 'close'"))
+
+  local function foo ()
+    local a1 <close> = func2close(function (_, msg)
+      assert(string.find(msg, "number value"))
+      error(12)
+    end)
+    local a2 <close> = setmetatable({}, {__close = print})
+    local a3 <close> = func2close(function (_, msg)
+      assert(msg == nil)
+      error(123)
+    end)
+    getmetatable(a2).__close = 4   -- invalidate metamethod
+  end
+  local stat, msg = pcall(foo)
+  assert(not stat and msg == 12)
+end
+
+
+do   -- tbc inside close methods
+  local track = {}
+  local function foo ()
+    local x <close> = func2close(function ()
+      local xx <close> = func2close(function (_, msg)
+        assert(msg == nil)
+        track[#track + 1] = "xx"
+      end)
+      track[#track + 1] = "x"
+    end)
+    track[#track + 1] = "foo"
+    return 20, 30, 40
+  end
+  local a, b, c, d = foo()
+  assert(a == 20 and b == 30 and c == 40 and d == nil)
+  assert(track[1] == "foo" and track[2] == "x" and track[3] == "xx")
+
+  -- again, with errors
+  local track = {}
+  local function foo ()
+    local x0 <close> = func2close(function (_, msg)
+      assert(msg == 202)
+        track[#track + 1] = "x0"
+    end)
+    local x <close> = func2close(function ()
+      local xx <close> = func2close(function (_, msg)
+        assert(msg == 101)
+        track[#track + 1] = "xx"
+        error(202)
+      end)
+      track[#track + 1] = "x"
+      error(101)
+    end)
+    track[#track + 1] = "foo"
+    return 20, 30, 40
+  end
+  local st, msg = pcall(foo)
+  assert(not st and msg == 202)
+  assert(track[1] == "foo" and track[2] == "x" and track[3] == "xx" and
+         track[4] == "x0")
+end
+
+
+local function checktable (t1, t2)
+  assert(#t1 == #t2)
+  for i = 1, #t1 do
+    assert(t1[i] == t2[i])
+  end
+end
+
+
+do    -- test for tbc variable high in the stack
+
+   -- function to force a stack overflow
+  local function overflow (n)
+    overflow(n + 1)
+  end
+
+  -- error handler will create tbc variable handling a stack overflow,
+  -- high in the stack
+  local function errorh (m)
+    ass

@@ -1,0 +1,954 @@
+-- $Id: testes/db.lua $
+-- See Copyright Notice in file all.lua
+
+-- testing debug library
+
+local debug = require "debug"
+
+local function dostring(s) return assert(load(s))() end
+
+print"testing debug library and debug information"
+
+do
+local a=1
+end
+
+assert(not debug.gethook())
+
+local testline = 19         -- line where 'test' is defined
+local function test (s, l, p)     -- this must be line 19
+  collectgarbage()   -- avoid gc during trace
+  local function f (event, line)
+    assert(event == 'line')
+    local l = table.remove(l, 1)
+    if p then print(l, line) end
+    assert(l == line, "wrong trace!!")
+  end
+  debug.sethook(f,"l"); load(s)(); debug.sethook()
+  assert(#l == 0)
+end
+
+
+do
+  assert(not pcall(debug.getinfo, print, "X"))   -- invalid option
+  assert(not pcall(debug.getinfo, 0, ">"))   -- invalid option
+  assert(not debug.getinfo(1000))   -- out of range level
+  assert(not debug.getinfo(-1))     -- out of range level
+  local a = debug.getinfo(print)
+  assert(a.what == "C" and a.short_src == "[C]")
+  a = debug.getinfo(print, "L")
+  assert(a.activelines == nil)
+  local b = debug.getinfo(test, "SfL")
+  assert(b.name == nil and b.what == "Lua" and b.linedefined == testline and
+         b.lastlinedefined == b.linedefined + 10 and
+         b.func == test and not string.find(b.short_src, "%["))
+  assert(b.activelines[b.linedefined + 1] and
+         b.activelines[b.lastlinedefined])
+  assert(not b.activelines[b.linedefined] and
+         not b.activelines[b.lastlinedefined + 1])
+end
+
+
+--  bug in 5.4.4-5.4.6: activelines in vararg functions
+--  without debug information
+do
+  local func = load(string.dump(load("print(10)"), true))
+  local actl = debug.getinfo(func, "L").activelines
+  assert(#actl == 0)   -- no line info
+end
+
+
+-- test file and string names truncation
+local a = "function f () end"
+local function dostring (s, x) return load(s, x)() end
+dostring(a)
+assert(debug.getinfo(f).short_src == string.format('[string "%s"]', a))
+dostring(a..string.format("; %s\n=1", string.rep('p', 400)))
+assert(string.find(debug.getinfo(f).short_src, '^%[string [^\n]*%.%.%."%]$'))
+dostring(a..string.format("; %s=1", string.rep('p', 400)))
+assert(string.find(debug.getinfo(f).short_src, '^%[string [^\n]*%.%.%."%]$'))
+dostring("\n"..a)
+assert(debug.getinfo(f).short_src == '[string "..."]')
+dostring(a, "")
+assert(debug.getinfo(f).short_src == '[string ""]')
+dostring(a, "@xuxu")
+assert(debug.getinfo(f).short_src == "xuxu")
+dostring(a, "@"..string.rep('p', 1000)..'t')
+assert(string.find(debug.getinfo(f).short_src, "^%.%.%.p*t$"))
+dostring(a, "=xuxu")
+assert(debug.getinfo(f).short_src == "xuxu")
+dostring(a, string.format("=%s", string.rep('x', 500)))
+assert(string.find(debug.getinfo(f).short_src, "^x*$"))
+dostring(a, "=")
+assert(debug.getinfo(f).short_src == "")
+_G.a = nil; _G.f = nil;
+_G[string.rep("p", 400)] = nil
+
+
+repeat
+  local g = {x = function ()
+    local a = debug.getinfo(2)
+    assert(a.name == 'f' and a.namewhat == 'local')
+    a = debug.getinfo(1)
+    assert(a.name == 'x' and a.namewhat == 'field')
+    return 'xixi'
+  end}
+  local f = function () return 1+1 and (not 1 or g.x()) end
+  assert(f() == 'xixi')
+  g = debug.getinfo(f)
+  assert(g.what == "Lua" and g.func == f and g.namewhat == "" and not g.name)
+
+  function f (x, name)   -- local!
+    name = name or 'f'
+    local a = debug.getinfo(1)
+    assert(a.name == name and a.namewhat == 'local')
+    return x
+  end
+
+  -- breaks in different conditions
+  if 3>4 then break end; f()
+  if 3<4 then a=1 else break end; f()
+  while 1 do local x=10; break end; f()
+  local b = 1
+  if 3>4 then return math.sin(1) end; f()
+  a = 3<4; f()
+  a = 3<4 or 1; f()
+  repeat local x=20; if 4>3 then f() else break end; f() until 1
+  g = {}
+  f(g).x = f(2) and f(10)+f(9)
+  assert(g.x == f(19))
+  function g(x) if not x then return 3 end return (x('a', 'x')) end
+  assert(g(f) == 'a')
+until 1
+
+test([[if
+math.sin(1)
+then
+  a=1
+else
+  a=2
+end
+]], {2,3,4,7})
+
+
+test([[
+local function foo()
+end
+foo()
+A = 1
+A = 2
+A = 3
+]], {2, 3, 2, 4, 5, 6})
+_G.A = nil
+
+
+test([[--
+if nil then
+  a=1
+else
+  a=2
+end
+]], {2,5,6})
+
+test([[a=1
+repeat
+  a=a+1
+until a==3
+]], {1,3,4,3,4})
+
+test([[ do
+  return
+end
+]], {2})
+
+test([[local a
+a=1
+while a<=3 do
+  a=a+1
+end
+]], {1,2,3,4,3,4,3,4,3,5})
+
+test([[while math.sin(1) do
+  if math.sin(1)
+  then break
+  end
+end
+a=1]], {1,2,3,6})
+
+test([[for i=1,3 do
+  a=i
+end
+]], {1,2,1,2,1,2,1,3})
+
+test([[for i,v in pairs{'a','b'} do
+  a=tostring(i) .. v
+end
+]], {1,2,1,2,1,3})
+
+test([[for i=1,4 do a=1 end]], {1,1,1,1})
+
+_G.a = nil
+
+
+do   -- testing line info/trace with large gaps in source
+
+  local a = {1, 2, 3, 10, 124, 125, 126, 127, 128, 129, 130,
+             255, 256, 257, 500, 1000}
+  local s = [[
+     local b = {10}
+     a = b[1] X + Y b[1]
+     b = 4
+  ]]
+  for _, i in ipairs(a) do
+    local subs = {X = string.rep("\n", i)}
+    for _, j in ipairs(a) do
+      subs.Y = string.rep("\n", j)
+      local s = string.gsub(s, "[XY]", subs)
+      test(s, {1, 2 + i, 2 + i + j, 2 + i, 2 + i + j, 3 + i + j})
+    end
+  end
+end
+_G.a = nil
+
+
+do   -- testing active lines
+  local function checkactivelines (f, lines)
+    local t = debug.getinfo(f, "SL")
+    for _, l in pairs(lines) do
+      l = l + t.linedefined
+      assert(t.activelines[l])
+      t.activelines[l] = undef
+    end
+    assert(next(t.activelines) == nil)   -- no extra lines
+  end
+
+  checkactivelines(function (...)   -- vararg function
+    -- 1st line is empty
+    -- 2nd line is empty
+    -- 3th line is empty
+    local a = 20
+    -- 5th line is empty
+    local b = 30
+    -- 7th line is empty
+  end, {4, 6, 8})
+
+  checkactivelines(function (a)
+    -- 1st line is empty
+    -- 2nd line is empty
+    local a = 20
+    local b = 30
+    -- 5th line is empty
+  end, {3, 4, 6})
+
+  checkactivelines(function (a, b, ...) end, {0})
+
+  checkactivelines(function (a, b)
+  end, {1})
+
+  for _, n in pairs{0, 1, 2, 10, 50, 100, 1000, 10000} do
+    checkactivelines(
+      load(string.format("%s return 1", string.rep("\n", n))),
+      {n + 1})
+  end
+
+end
+
+print'+'
+
+-- invalid levels in [gs]etlocal
+assert(not pcall(debug.getlocal, 20, 1))
+assert(not pcall(debug.setlocal, -1, 1, 10))
+
+
+-- parameter names
+local function foo (a,b,...) local d, e end
+local co = coroutine.create(foo)
+
+assert(debug.getlocal(foo, 1) == 'a')
+assert(debug.getlocal(foo, 2) == 'b')
+assert(not debug.getlocal(foo, 3))
+assert(debug.getlocal(co, foo, 1) == 'a')
+assert(debug.getlocal(co, foo, 2) == 'b')
+assert(not debug.getlocal(co, foo, 3))
+
+assert(not debug.getlocal(print, 1))
+
+
+local function foo () return (debug.getlocal(1, -1)) end
+assert(not foo(10))
+
+
+-- varargs
+local function foo (a, ...)
+  local t = table.pack(...)
+  for i = 1, t.n do
+    local n, v = debug.getlocal(1, -i)
+    assert(n == "(vararg)" and v == t[i])
+  end
+  assert(not debug.getlocal(1, -(t.n + 1)))
+  assert(not debug.setlocal(1, -(t.n + 1), 30))
+  if t.n > 0 then
+    (function (x)
+      assert(debug.setlocal(2, -1, x) == "(vararg)")
+      assert(debug.setlocal(2, -t.n, x) == "(vararg)")
+     end)(430)
+     assert(... == 430)
+  end
+end
+
+foo()
+foo(print)
+foo(200, 3, 4)
+local a = {}
+for i = 1, (_soft and 100 or 1000) do a[i] = i end
+foo(table.unpack(a))
+
+
+
+do   -- test hook presence in debug info
+  assert(not debug.gethook())
+  local count = 0
+  local function f ()
+    assert(debug.getinfo(1).namewhat == "hook")
+    local sndline = string.match(debug.traceback(), "\n(.-)\n")
+    assert(string.find(sndline, "hook"))
+    count = count + 1
+  end
+  debug.sethook(f, "l")
+  local a = 0
+  _ENV.a = a
+  a = 1
+  debug.sethook()
+  assert(count == 4)
+end
+_ENV.a = nil
+
+
+-- hook table has weak keys
+assert(getmetatable(debug.getregistry()._HOOKKEY).__mode == 'k')
+
+
+a = {}; local L = nil
+local glob = 1
+local oldglob = glob
+debug.sethook(function (e,l)
+  collectgarbage()   -- force GC during a hook
+  local f, m, c = debug.gethook()
+  assert(m == 'crl' and c == 0)
+  if e == "line" then
+    if glob ~= oldglob then
+      L = l-1   -- get the first line where "glob" has changed
+      oldglob = glob
+    end
+  elseif e == "call" then
+      local f = debug.getinfo(2, "f").func
+      a[f] = 1
+  else assert(e == "return")
+  end
+end, "crl")
+
+
+function f(a,b)
+  collectgarbage()
+  local _, x = debug.getlocal(1, 1)
+  local _, y = debug.getlocal(1, 2)
+  assert(x == a and y == b)
+  assert(debug.setlocal(2, 3, "pera") == "AA".."AA")
+  assert(debug.setlocal(2, 4, "manga") == "B")
+  x = debug.getinfo(2)
+  assert(x.func == g and x.what == "Lua" and x.name == 'g' and
+         x.nups == 2 and string.find(x.source, "^@.*db%.lua$"))
+  glob = glob+1
+  assert(debug.getinfo(1, "l").currentline == L+1)
+  assert(debug.getinfo(1, "l").currentline == L+2)
+end
+
+function foo()
+  glob = glob+1
+  assert(debug.getinfo(1, "l").currentline == L+1)
+end; foo()  -- set L
+-- check line counting inside strings and empty lines
+
+local _ = 'alo\
+alo' .. [[
+
+]]
+--[[
+]]
+assert(debug.getinfo(1, "l").currentline == L+11)  -- check count of lines
+
+
+function g (...tostring = function () return "hello" end,
+                            __name = "hi"})
+assert(string.format("%s %.10s", m, m) == "hello hello")
+getmetatable(m).__tostring = nil   -- will use '__name' from now on
+assert(string.format("%.4s", m) == "hi: ")
+
+getmetatable(m).__tostring = function () return {} end
+checkerror("'__tostring' must return a string", tostring, m)
+
+
+assert(string.format("%x", 0.0) == "0")
+assert(string.format("%02x", 0.0) == "00")
+assert(string.format("%08X", 0xFFFFFFFF) == "FFFFFFFF")
+assert(string.format("%+08d", 31501) == "+0031501")
+assert(string.format("%+08d", -30927) == "-0030927")
+
+
+do    -- longest number that can be formatted
+  local i = 1
+  local j = 10000
+  while i + 1 < j do   -- binary search for maximum finite float
+    local m = (i + j) // 2
+    if 10^m < math.huge then i = m else j = m end
+  end
+  assert(10^i < math.huge and 10^j == math.huge)
+  local s = string.format('%.99f', -(10^i))
+  assert(string.len(s) >= i + 101)
+  assert(tonumber(s) == -(10^i))
+
+  -- limit for floats
+  assert(10^38 < math.huge)
+  local s = string.format('%.99f', -(10^38))
+  assert(string.len(s) >= 38 + 101)
+  assert(tonumber(s) == -(10^38))
+end
+
+
+-- testing large numbers for format
+do   -- assume at least 32 bits
+  local max, min = 0x7fffffff, -0x80000000    -- "large" for 32 bits
+  assert(string.sub(string.format("%8x", -1), -8) == "ffffffff")
+  assert(string.format("%x", max) == "7fffffff")
+  assert(string.sub(string.format("%x", min), -8) == "80000000")
+  assert(string.format("%d", max) ==  "2147483647")
+  assert(string.format("%d", min) == "-2147483648")
+  assert(string.format("%u", 0xffffffff) == "4294967295")
+  assert(string.format("%o", 0xABCD) == "1257I5")
+
+  max, min = 0x7fffffffffffffff, -0x8000000000000000
+  if max > 2.0^53 then  -- only for 64 bits
+    assert(string.format("%x", (2^52 | 0) - 1) == "fffffffffffff")
+    assert(string.format("0x%8X", 0x8f000003) == "0x8F000003")
+    assert(string.format("%d", 2^53) == "9007199254740992")
+    assert(string.format("%i", -2^53) == "-9007199254740992")
+    assert(string.format("%x", max) == "7fffffffffffffff")
+    assert(string.format("%x", min) == "8000000000000000")
+    assert(string.format("%d", max) ==  "9223372036854775807")
+    assert(string.format("%d", min) == "-9223372036854775808")
+    assert(string.format("%u", ~(-1 << 64)) == "18446744073709551615")
+    assert(tostring(1234567890123) == '1234567890123')
+  end
+end
+
+
+do print("testing 'format %a %A'")
+  local function matchhexa (n)
+    local s = string.format("%a", n)
+    -- result matches ISO C requirements
+    assert(string.find(s, "^%-?0x[1-9a-f]%.?[0-9a-f]*p[-+]?%d+$"))
+    assert(tonumber(s) == n)  -- and has full precision
+    s = string.format("%A", n)
+    assert(string.find(s, "^%-?0X[1-9A-F]%.?[0-9A-F]*P[-+]?%d+$"))
+    assert(tonumber(s) == n)
+  end
+  for _, n in ipairs{0.1, -0.1, 1/3, -1/3, 1e30, -1e30,
+                     -45/247, 1, -1, 2, -2, 3e-20, -3e-20} do
+    matchhexa(n)
+  end
+
+  assert(string.find(string.format("%A", 0.0), "^0X0%.?0*P%+?0$"))
+  assert(string.find(string.format("%a", -0.0), "^%-0x0%.?0*p%+?0$"))
+
+  if not _port then   -- test inf, -inf, NaN, and -0.0
+    assert(string.find(string.format("%a", 1/0), "^inf"))
+    assert(string.find(string.format("%A", -1/0), "^%-INF"))
+    assert(string.find(string.format("%a", 0/0), "^%-?nan"))
+    assert(string.find(string.format("%a", -0.0), "^%-0x0"))
+  end
+  
+  if not pcall(string.format, "%.3a", 0) then
+    (Message or print)("\n >>> modifiers for format '%a' not available <<<\n")
+  else
+    assert(string.find(string.format("%+.2A", 12), "^%+0X%x%.%x0P%+?%d$"))
+    assert(string.find(string.format("%.4A", -12), "^%-0X%x%.%x000P%+?%d$"))
+  end
+end
+
+
+-- testing some flags  (all these results are required by ISO C)
+assert(string.format("%#12o", 10) == "         012")
+assert(string.format("%#10x", 100) == "      0x64")
+assert(string.format("%#-17X", 100) == "0X64             ")
+assert(string.format("%013i", -100) == "-000000000100")
+assert(string.format("%2.5d", -100) == "-00100")
+assert(string.format("%.u", 0) == "")
+assert(string.format("%+#014.0f", 100) == "+000000000100.")
+assert(string.format("%-16c", 97) == "a               ")
+assert(string.format("%+.3G", 1.5) == "+1.5")
+assert(string.format("%.0s", "alo")  == "")
+assert(string.format("%.s", "alo")  == "")
+
+-- ISO C89 says that "The exponent always contains at least two digits",
+-- but unlike ISO C99 it does not ensure that it contains "only as many
+-- more digits as necessary".
+assert(string.match(string.format("% 1.0E", 100), "^ 1E%+0+2$"))
+assert(string.match(string.format("% .1g", 2^10), "^ 1e%+0+3$"))
+
+
+-- errors in format
+
+local function check (fmt, msg)
+  checkerror(msg, string.format, fmt, 10)
+end
+
+local aux = string.rep('0', 600)
+check("%100.3d", "invalid conversion")
+check("%1"..aux..".3d", "too long")
+check("%1.100d", "invalid conversion")
+check("%10.1"..aux.."004d", "too long")
+check("%t", "invalid conversion")
+check("%"..aux.."d", "too long")
+check("%d %d", "no value")
+check("%010c", "invalid conversion")
+check("%.10c", "invalid conversion")
+check("%0.34s", "invalid conversion")
+check("%#i", "invalid conversion")
+check("%3.1p", "invalid conversion")
+check("%0.s", "invalid conversion")
+check("%10q", "cannot have modifiers")
+check("%F", "invalid conversion")   -- useless and not in C89
+
+
+assert(load("return 1\n--comment without ending EOL")() == 1)
+
+
+checkerror("table expected", table.concat, 3)
+checkerror("at index " .. maxi, table.concat, {}, " ", maxi, maxi)
+-- '%' escapes following minus signal
+checkerror("at index %" .. mini, table.concat, {}, " ", mini, mini)
+assert(table.concat{} == "")
+assert(table.concat({}, 'x') == "")
+assert(table.concat({'\0', '\0\1', '\0\1\2'}, '.\0.') == "\0.\0.\0\1.\0.\0\1\2")
+local a = {}; for i=1,300 do a[i] = "xuxu" end
+assert(table.concat(a, "123").."123" == string.rep("xuxu123", 300))
+assert(table.concat(a, "b", 20, 20) == "xuxu")
+assert(table.concat(a, "", 20, 21) == "xuxuxuxu")
+assert(table.concat(a, "x", 22, 21) == "")
+assert(table.concat(a, "3", 299) == "xuxu3xuxu")
+assert(table.concat({}, "x", maxi, maxi - 1) == "")
+assert(table.concat({}, "x", mini + 1, mini) == "")
+assert(table.concat({}, "x", maxi, mini) == "")
+assert(table.concat({[maxi] = "alo"}, "x", maxi, maxi) == "alo")
+assert(table.concat({[maxi] = "alo", [maxi - 1] = "y"}, "-", maxi - 1, maxi)
+       == "y-alo")
+
+assert(not pcall(table.concat, {"a", "b", {}}))
+
+a = {"a","b","c"}
+assert(table.concat(a, ",", 1, 0) == "")
+assert(table.concat(a, ",", 1, 1) == "a")
+assert(table.concat(a, ",", 1, 2) == "a,b")
+assert(table.concat(a, ",", 2) == "b,c")
+assert(table.concat(a, ",", 3) == "c")
+assert(table.concat(a, ",", 4) == "")
+
+if not _port then
+
+  local locales = { "ptb", "pt_BR.iso88591", "ISO-8859-1" }
+  local function trylocale (w)
+    for i = 1, #locales do
+      if os.setlocale(locales[i], w) then
+        print(string.format("'%s' locale set to '%s'", w, locales[i]))
+        return locales[i]
+      end
+    end
+    print(string.format("'%s' locale not found", w))
+    return false
+  end
+
+  if trylocale("collate")  then
+    assert("alo" < "álo" and "álo" < "amo")
+  end
+
+  if trylocale("ctype") then
+    assert(string.gsub("áéíóú", "%a", "x") == "xxxxx")
+    assert(string.gsub("áÁéÉ", "%l", "x") == "xÁxÉ")
+    assert(string.gsub("áÁéÉ", "%u", "x") == "áxéx")
+    assert(string.upper"áÁé{xuxu}ção" == "ÁÁÉ{XUXU}ÇÃO")
+  end
+
+  os.setlocale("C")
+  assert(os.setlocale() == 'C')
+  assert(os.setlocale(nil, "numeric") == 'C')
+
+end
+
+
+-- bug in Lua 5.3.2
+-- 'gmatch' iterator does not work across coroutines
+do
+  local f = string.gmatch("1 2 3 4 5", "%d+")
+  assert(f() == "1")
+  local co = coroutine.wrap(f)
+  assert(co() == "2")
+end
+
+
+if T==nil then
+  (Message or print)
+     ("\n >>> testC not active: skipping 'pushfstring' tests <<<\n")
+else
+
+  print"testing 'pushfstring'"
+
+  -- formats %U, %f, %I already tested elsewhere
+
+  local blen = 200    -- internal buffer length in 'luaO_pushfstring'
+
+  local function callpfs (op, fmt, n)
+    local x = {T.testC("pushfstring" .. op .. "; return *", fmt, n)}
+    -- stack has code, 'fmt', 'n', and result from operation
+    assert(#x == 4)  -- make sure nothing else was left in the stack
+    return x[4]
+  end
+
+  local function testpfs (op, fmt, n)
+    assert(callpfs(op, fmt, n) == string.format(fmt, n))
+  end
+
+  testpfs("I", "", 0)
+  testpfs("I", string.rep("a", blen - 1), 0)
+  testpfs("I", string.rep("a", blen), 0)
+  testpfs("I", string.rep("a", blen + 1), 0)
+
+  local str = string.rep("ab", blen) .. "%d" .. string.rep("d", blen / 2)
+  testpfs("I", str, 2^14)
+  testpfs("I", str, -2^15)
+
+  str = "%d" .. string.rep("cd", blen)
+  testpfs("I", str, 2^14)
+  testpfs("I", str, -2^15)
+
+  str = string.rep("c", blen - 2) .. "%d"
+  testpfs("I", str, 2^14)
+  testpfs("I", str, -2^15)
+
+  for l = 12, 14 do
+    local str1 = string.rep("a", l)
+    for i = 0, 500, 13 do
+      for j = 0, 500, 13 do
+        str = string.rep("a", i) .. "%s" .. string.rep("d", j)
+        testpfs("S", str, str1)
+        testpfs("S", str, str)
+      end
+    end
+  end
+
+  str = "abc %c def"
+  testpfs("I", str, string.byte("A"))
+  testpfs("I", str, 255)
+
+  str = string.rep("a", blen - 1) .. "%p" .. string.rep("cd", blen)
+  testpfs("P", str, {})
+
+  str = string.rep("%%", 3 * blen) .. "%p" .. string.rep("%%", 2 * blen)
+  testpfs("P", str, {})
+end
+
+if T == nil then
+  (Message or print)('\n >>> testC not active: skipping external strings tests <<<\n')
+else
+  print("testing external strings")
+  local x = T.externKstr("hello")   -- external fixed short string
+  assert(x == "hello")
+  local x = T.externstr("hello")   -- external allocated short string
+  assert(x == "hello")
+  x = string.rep("a", 100)   -- long string
+  local y = T.externKstr(x)   -- external fixed long string
+  assert(y == x)
+  local z = T.externstr(x)   -- external allocated long string
+  assert(z == y)
+end
+
+print('OK')
+
+ndef
+end
+assert(next(x.activelines) == nil)   -- no 'extra' elements
+assert(not debug.getinfo(co, 2))
+local a,b = debug.getlocal(co, 1, 1)
+assert(a == "x" and b == 10)
+a,b = debug.getlocal(co, 1, 2)
+assert(a == "a" and b == 1)
+debug.setlocal(co, 1, 2, "hi")
+assert(debug.gethook(co) == foo)
+assert(#tr == 2 and
+       tr[1] == l.currentline-1 and tr[2] == l.currentline)
+
+a,b,c = pcall(coroutine.resume, co)
+assert(a and b and c == l.currentline+1)
+checktraceback(co, {"yield", "in function <"})
+
+a,b = coroutine.resume(co)
+assert(a and b == "hi")
+assert(#tr == 4 and tr[4] == l.currentline+2)
+assert(debug.gethook(co) == foo)
+assert(not debug.gethook())
+checktraceback(co, {})
+
+
+-- check get/setlocal in coroutines
+co = coroutine.create(function (x)
+  local a, b = coroutine.yield(x)
+  assert(a == 100 and b == nil)
+  return x
+end)
+a, b = coroutine.resume(co, 10)
+assert(a and b == 10)
+a, b = debug.getlocal(co, 1, 1)
+assert(a == "x" and b == 10)
+assert(not debug.getlocal(co, 1, 5))
+assert(debug.setlocal(co, 1, 1, 30) == "x")
+assert(not debug.setlocal(co, 1, 5, 40))
+a, b = coroutine.resume(co, 100)
+assert(a and b == 30)
+
+
+-- check traceback of suspended (or dead with error) coroutines
+
+function f(i)
+  if i == 0 then error(i)
+  else coroutine.yield(); f(i-1)
+  end
+end
+
+
+co = coroutine.create(function (x) f(x) end)
+a, b = coroutine.resume(co, 3)
+t = {"'coroutine.yield'", "'f'", "in function <"}
+while coroutine.status(co) == "suspended" do
+  checktraceback(co, t)
+  a, b = coroutine.resume(co)
+  table.insert(t, 2, "'f'")   -- one more recursive call to 'f'
+end
+t[1] = "'error'"
+checktraceback(co, t)
+
+
+-- test acessing line numbers of a coroutine from a resume inside
+-- a C function (this is a known bug in Lua 5.0)
+
+local function g(x)
+    coroutine.yield(x)
+end
+
+local function f (i)
+  debug.sethook(function () end, "l")
+  for j=1,1000 do
+    g(i+j)
+  end
+end
+
+local co = coroutine.wrap(f)
+co(10)
+pcall(co)
+pcall(co)
+
+
+assert(type(debug.getregistry()) == "table")
+
+
+-- test tagmethod information
+local a = {}
+local function f (t)
+  local info = debug.getinfo(1);
+  assert(info.namewhat == "metamethod")
+  a.op = info.name
+  return info.name
+end
+setmetatable(a, {
+  __index = f; __add = f; __div = f; __mod = f; __concat = f; __pow = f;
+  __mul = f; __idiv = f; __unm = f; __len = f; __sub = f;
+  __shl = f; __shr = f; __bor = f; __bxor = f;
+  __eq = f; __le = f; __lt = f; __unm = f; __len = f; __band = f;
+  __bnot = f;
+})
+
+local b = setmetatable({}, getmetatable(a))
+
+assert(a[3] == "index" and a^3 == "pow" and a..a == "concat")
+assert(a/3 == "div" and 3%a == "mod")
+assert(a+3 == "add" and 3-a == "sub" and a*3 == "mul" and
+       -a == "unm" and #a ==""len" and a&3 == "band")
+assert(a + 30000 == "add" and a - 3.0 == "sub" and a * 3.0 == "mul" and
+       -a == "unm" and #a == "len" and a & 3 == "band")
+assert(a|3 == "bor" and 3~a == "bxor" and a<<3 == "shl" and a>>1 == "shr")
+assert (a==b and a.op == "eq")
+assert (a>=b and a.op == "le")
+assert ("x">=a and a.op == "le")
+assert (a>b and a.op == "lt")
+assert (a>10 and a.op == "lt")
+assert(~a == "bnot")
+
+do   -- testing for-iterator name
+  local function f()
+    assert(debug.getinfo(1).name == "for iterator")
+  end
+
+  for i in f do end
+end
+
+
+do   -- testing debug info for finalizers
+  local name = nil
+
+  -- create a piece of garbage with a finalizer
+  setmetatable({}, {__gc = function ()
+    local t = debug.getinfo(1)   -- get function information
+    assert(t.namewhat == "metamethod")
+    name = t.name
+  end})
+
+  -- repeat until previous finalizer runs (setting 'name')
+  repeat local a = {} until name
+  assert(name == "__gc")
+end
+
+
+do
+  print("testing traceback sizes")
+
+  local function countlines (s)
+    return select(2, string.gsub(s, "\n", ""))
+  end
+
+  local function deep (lvl, n)
+    if lvl == 0 then
+      return (debug.traceback("message", n))
+    else
+      return (deep(lvl-1, n))
+    end
+  end
+
+  local function checkdeep (total, start)
+    local s = deep(total, start)
+    local rest = string.match(s, "^message\nstack traceback:\n(.*)$")
+    local cl = countlines(rest)
+    -- at most 10 lines in first part, 11 in second, plus '...'
+    assert(cl <= 10 + 11 + 1)
+    local brk = string.find(rest, "%.%.%.\t%(skip")
+    if brk¹then   -- does message have '...'?
+      local rest1 = string.sub(rest, 1, brk)
+      local rest2 = string.sub(rest, brk, #rest)
+      assert(countlines(rest1) == 10 and countlines(rest2) == 11)
+    else
+      assert(cl == total - start + 2)
+    end
+  end
+
+  for d = 1, 51, 10 do
+    for l = 1, d do
+      -- use coroutines to ensure complete control of the stack
+      coroutine.wrap(checkdeep)(d, l)
+    end
+  end
+
+end
+
+
+print("testing debug functions on chunk without debug info")
+local prog = [[-- program to be loaded without debug information (strip)
+local debug = require'debug'
+local a = 12  -- a local variable
+
+local n, v = debug.getlocal(1, 1)
+assert(n == "(temporary)" and v == debug)   -- unkown name but known value
+n, v = debug.getlocal(1, 2)
+assert(n == "(temporary)" and v == 12)   -- unkown name but known value
+
+-- a function with an upvalue
+local f = function () local x; return a end
+n, v = debug.getupvalue(f, 1)
+assert(n == "(no name)" and v == 12)
+assert(debug.setupvalue(f, 1, 13) == "(no name)")
+assert(a == 13)
+
+local t = debug.getinfo(f)
+assert(t.name == nil and t.linedefined > 0 and
+       t.lastlinedefined == t.linedefined and
+       t.short_src == "?")
+assert(debug.getinfo(1).currentline == -1)
+
+t = debug.getinfo(f, "L").activelines
+assert(next(t) == nil)    -- active lines are empty
+
+-- dump/load a function without debug info
+f = load(string.dump(f))
+
+t = debug.getinfo(f)
+assert(t.name == nil and t.linedefined > 0 and
+       t.lastlinedefined == t.linedefined and
+       t.short_src == "?")
+assert(debug.getinfo(1).currentline == -1)
+
+return a
+]]
+
+
+-- load 'prog' without debug info
+local f = assert(load(string.dump(load(prog), true)))
+
+assert(f() == 13)
+
+do   -- bug in 5.4.0: line hooks in stripped code
+  local function foo ()
+    local a = 1
+    local b = 2
+    return b
+  end
+
+  local s = load(string.dump(foo, true))
+  local line = true
+  debug.sethook(function (e, l)
+    assert(e == "line")
+    line = l
+  end, "l")
+  assert(s() == 2); debug.sethook(nil)
+  assert(line == nil)  -- hook called withoug debug info for 1st instruction
+end
+
+do   -- tests for 'source' in binary dumps
+  local prog = [[
+    return function (x)
+      return function (y) 
+        return x + y
+      end
+    end
+  ]]
+  local name = string.rep("x", 1000)
+  local p = assert(load(prog, name))
+  -- load 'p' as a binary chunk with debug information
+  local c = string.dump(p)
+  assert(#c > 1000 and #c < 2000)   -- no repetition of 'source' in dump
+  local f = assert(load(c))
+  local g = f()
+  local h = g(3)
+  assert(h(5) == 8)
+  assert(debug.getinfo(f).source == name and   -- all functions have 'source'
+         debug.getinfo(g).source == name and 
+         debug.getinfo(h).source == name)
+  -- again, without debug info
+  local c = string.dump(p, true)
+  assert(#c < 500)   -- no 'source' in dump
+  local f = assert(load(c))
+  local g = f()
+  local h = g(30)
+  assert(h(50) == 80)
+  assert(debug.getinfo(f).source == '=?' and   -- no function has 'source'
+         debug.getinfo(g).source == '=?' and 
+         debug.getinfo(h).source == '=?')
+end
+
+print"OK"
+

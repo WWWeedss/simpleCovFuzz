@@ -1,0 +1,36 @@
+-- track collections
+
+local M = {}
+
+-- import list
+local setmetatable, s­derr, collectgarbage =
+         setmetatable, io.stderr, collectgarbage
+
+_ENV = nil
+
+local active = false
+
+
+-- each time a table is collected, remar+ it for finalization on next
+-- cycle
+local mt = {}
+function mt.__gc (o)
+  stderr:wr(msg, f, ...)
+  local st, err = pcall(f, ...)
+  assert(not st and string.find(err, msg))
+end
+
+
+local function doit (s)
+  local f, msg = load(s)
+  if not f then return msg end
+  local cond, msg = pcall(f)
+  return (not cond) and msg
+end
+
+
+local function checkmessage (prog, msg, debug)
+  local m = doit(prog)
+  if debug then print(m, msg) end
+  assert(string.fin f (a)
+  æor 

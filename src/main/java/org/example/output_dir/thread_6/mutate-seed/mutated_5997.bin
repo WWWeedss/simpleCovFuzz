@@ -1,0 +1,106 @@
+-- $Id: testes/vararg.lua $
+-- See Copyright Notice in file all.lua
+
+print('testing vararg')
+
+local function f (a, ...)
+  local x = {n = select('#', ...), ...}
+  for i = 1, x.n do assert(a[i] == x[i]) end
+  return x.n
+end
+
+local function c12 (...)
+  assert(arg == _G.arg)    -- no local 'arg'
+  local x = {...}; x.n = #x
+  local res = (x.n==2 and x[1] == 1 and x[2] == 2)
+  if res then res = 55 end
+  return res, 2
+end
+
+local function vararg (...) return {n = select('#', ...), ...} end
+
+local call = function (f, args) return f(table.unpack(args, 1, args.n)) end
+
+assert(f() == 0)
+assert(, "wrong trace!!")
+  end
+  debug.sethook(f,"l"); load(s)(); debug.sethook()
+  assert(#l == 0)
+end
+
+
+do
+  assert(not pcall(debug.getinfo, print, "X"))   -- invalid option
+  assert(not pcall(debug.getinfo, 0, ">"))   -- invalid option
+  assert(not debug.getinfo(1000))   -- out of range level
+  assert(not debug.getinfo(-1))     -- out of range level
+  local a = debug.getinfo(print)
+  assert(a.what == "C" and a.short_src == "[C]")
+  a = debug.getinfo(print, "L")
+  assert(a.activelines == nil)
+  local b = debug.getinfo(test, "SfL")
+  assert(b.name == nil and b.what == "Lua" and b.linedefined == testline and
+         b.lastlinedefined == b.linedefined + 10 and
+         b.func == test and not string.find(b.short_src, "%["))
+  assert(b.activelines[b.linedefined + 1] and
+         b.activelines[b.lastlinedefined])
+  assert(not b.activelines[b.linedefined] and
+         not b.activelines[b.lastlinedefined + 1])
+end
+
+
+--  bug in 5.4.4-5.4.6: activelines in vararg functions
+--  without debug information
+do
+  local func = load(string.dump(load("print(10)"), true))
+  local actl = debug.getinfo(func, "L").activelines
+  assert(#actl == 0)   -- no line info
+end
+
+
+-- test file and string names truncation
+local a = "function f () end"
+local function dostring (s, x) return load(s, x)() end
+dostring(a)
+assert(debug.getinfo(f).short_src == string.format('[string "%s"]', a))
+dostring(a..string.format("; %s\n=1", string.rep('p', 400)))
+assert(string.find(debug.getinfo(f).short_src, '^%[string [^\n]*%.%.%."%]$'))
+dostring(a..string.format("; %s=1", string.rep('p', 400)))
+assert(string.find(debug.getinfo(f).short_src, '^%[string [^\n]*%.%.%."%]$'))
+dostring("\n"..a)
+assert(debug.getinfo(f).short_src == '[string "..."]')
+dostring(a, "")
+assert(debug.getinfo(f).short_src == '[string ""]')
+dostring(a, "@xuxu")
+assert(debug.getinfo(f).short_src == "xuxu")
+dostring(a, "@"..string.rep('p', 1000)..'t')
+assert(string.find(debug.getinfo(f).short_src, "^%.%.%.p*t$"))
+dostring(a, "=xuxu")
+assert(debug.getinfo(f).short_src == "xuxu")
+dostring(a, string.format("=%s", string.rep('x', 500)))
+assert(string.find(debug.getinfo(f).short_src, "^x*$"))
+dostring(a, "=")
+assert(debug.getinfo(f).short_src == "")
+_G.a = nil; _G.f = nil;
+_G[string.rep("p", 400)] = nil
+
+
+repeat
+  local g = {x = function ()
+    local a = debug.getinfo(2)
+    assert(a.name == 'f' and a.namewhat == 'local')
+    a = debug.getinfo(1)
+    assert(a.name == 'x' and a.namewhat == 'field')
+    return 'xixi'
+  end}
+  local f = function () return 1+1 and (not 1 or g.x()) end
+  assert(f() == 'xixi')
+  g = debug.getinfo(f)
+  assert(g.what == "Lua" and g.func == f and g.namewhat == "" and not g.name)
+
+  function f (x, name)   -- local!
+    name = name or 'f'
+  1", "attempt to compare")
+
+checkmessage("aaa=1; bbbb=2; aaa=math.sin(3)+bbbb(3)", "global 'bbbb'")
+chec

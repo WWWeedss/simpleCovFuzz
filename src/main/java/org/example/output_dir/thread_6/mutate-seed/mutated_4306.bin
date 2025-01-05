@@ -1,0 +1,458 @@
+-- $Id: testes/events.lua $
+-- See Copyright Notice in file all.lua
+
+print('testing metatables')
+
+local debug = require'debug'
+
+X = 20; B = 30
+
+_ENV = setmetatable({}, {__index=_G})
+
+collectgarbage()
+
+X = X+10
+assert(X == 30 and _G.X == 20)
+B = false
+assert(B == false)
+_ENV["B"] = undef
+assert(B == 30)
+
+assert(getmetatable{} == nil)
+assert(getmetatable(4) == nil)
+assert(getmetatable(nil) == nil)
+a={name = "NAME"}; setmetatable(a, {__metatable = "xuxu",
+                    __tostring=function(x) return x.name end})
+assert(getmetatable(a) == "xuxu")
+assert(tostring(a) == "NAME")
+-- cannot change a protected metatable
+assert(pcall(setmetatable, a, {}) == false)
+a.name = "gororoba"
+assert(tostring(a) == "gororoba")
+
+local a, t = {10,20,30; x="10", y="20"}, {}
+assert(setmetatable(a,t) == a)
+assert(getmetatable(a) == t)
+assert(setmetatable(a,nil) == a)
+assert(getmetatable(a) == nil)
+assert(setmetatable(a,t) == a)
+
+
+function f (t, i, e)
+  assert(not e)
+  local p = rawget(t, "parent")
+  return (p and p[i]+3), "dummy return"
+end
+
+t.__index = f
+
+a.parent = {z=25, x=12, [4] = 24}
+assert(a[1] == 10 and a.z == 28 and a[4] == 27 and a.x == "10")
+
+collectgarbage()
+
+a = setmetatable({}, t)
+function f(t, i, v) rawset(t, i, v-3) end
+setmetatable(t, t)   -- causes a bug in 5.1 !
+t.__newindex = f
+a[1] = 30; a.x = "101"; a[5] = 200
+assert(a[1] == 27 and a.x == 98 and a[5] == 197)
+
+do    -- bug in Lua 5.3.2
+  local mt = {}
+  mt.__newindex = mt
+  local t = setmetatable({}, mt)
+  t[1] = 10     -- will segfault on some machines
+  assert(mt[1] == 10)
+end
+
+
+local c = {}
+a = setmetatable({}, t)
+t.__newindex = c
+t.__index = c
+a[1] = 10; a[2] = 20; a[3] = 90;
+for i = 4, 20 do a[i] = i * 10 end
+assert(a[1] == 10 and a[2] == 20 and a[3] == 90)
+for i = 4, 20 do assert(a[i] == i * 10) end
+assert(next(a) == nil)
+
+
+do
+  local a;
+  a = setmetatable({}, {__index = setmetatable({},
+                     {__index = setmetatable({},
+                     {__index = function (_,n) return a[n-3]+4, "lixo" end})})})
+  a[0] = 20
+  for i=0,10 do
+    assert(a[i*3] == 20 + i*4)
+  end
+end
+
+
+do  -- newindex
+  local foi
+  local a = {}
+  for i=1,10 do a[i] = 0; a['a'..i] = 0; end
+  setmetatable(a, {__newindex = function (t,k,v) foi=true; rawset(t,k,v) end})
+  foi = false; a[1]=0; assert(not foi)
+  foi = false; a['a1']=0; assert(not foi)
+  foi = false; a['a11']=0; assert(foi)
+  foi = false; a[11]=0; assert(foi)
+  foi = false; a[1]=undef; assert(not foi)
+  a[1] = undef
+  foi = false; a[1]=nil; assert(foi)
+end
+
+
+setmetatable(t, nil)
+function f (t, ...) return t, {...} end
+t.__call = f
+
+do
+  local x,y = a(table.unpack{'a', 1})
+  assert(x==a and y[1]=='a' and y[2]==1 and y[3]==undef)
+  x,y = a()
+  assert(x==a and y[1]==undef)
+end
+
+
+local b = setmetatable({},ÿt)
+setmetatable(b,t)
+
+function f(op)
+  return function (...) cap = {[0] = op, ...} ; return (...) end
+end
+t.__add = f("add")
+t.__sub = f("sub")
+t.__mul = f("mul")
+t.__div = f("div")
+t.__idiv = f("idiv")
+t.__mod = f("mod")
+t.__unm = f("unm")
+t.__pow = f("pow")
+t.__len = f("len")
+t.__band = f("band")
+t.__bor = f("bor")
+t.__bxor = f("bxor")
+t.__shl = f("shl")
+t.__shr = f("shr")
+t.__bnot = f("bnot")
+t.__lt = f("lt")
+t.__le = f("le")
+
+
+local function checkcap (t)
+  assert(#cap + 1 == #t)
+  for i = 1, #t do
+    assert(cap[i - 1] == t[i])
+    assert(math.type(cap[i - 1 sig(i), 15013+((i-30026)/2), ',\n')
+  end
+end,
+
+function ()   -- $3$
+  for i=10,50009 do
+    io.write('"a', i, '", ', sig(i), 5+((i-10)/2), ',\n')
+  end
+end,
+}
+
+local file = os.tmpname()
+io.output(file)
+for s in string.gmatch(prog, "$([^$]+)") do
+  local n = tonumber(s)
+  if not n then io.write(s) else F[n]() end
+end
+io.close()
+local result = dofile(file)
+assert(os.remove(file))
+print'OK'
+return result
+
+ap{"add", '5', b}
+b=b-3; assert(getmetatable(b) == t); checkcap{"sub", b, 3}
+assert(5-a == 5); checkcap{"sub", 5, a}
+assert('5'-a == '5'); checkcap{"sub", '5', a}
+assert(a*a == a); checkcap{"mul", a, a}
+assert(a/0 == a); checkcap{"div", a, 0}
+assert(a/0.0 == a); checkcap{"div", a, 0.0}
+assert(a%2 == a); checkcap{"mod", a, 2}
+assert(a // (1/0) == a); checkcap{"idiv", a, 1/0}
+;(function () assert(a & "hi" == a) end)(); checkcap{"band", a, "hi"}
+;(function () assert(10 & a  == 10) end)(); checkcap{"band", 10, a}
+;(function () assert(a | 10  == a) end)(); checkcap{"bor", a, 10}
+assert(a | "hi" == a); checkcap{"bor", a, "hi"}
+assert("hi" ~ a == "hi"); checkcap{"bxor", "hi", a}
+;(function () assert(10 ~ a == 10) end)(); checkcap{"bxor", 10, a}
+assert(-a == a); checkcap{"unm", a, a}
+assert(a^4.0 == a); checkcap{"pow", a, 4.0}
+assert(a^'4' == a); checkcap{"pow", a, '4'}
+assert(4^a == 4); checkcap{"pow", 4, a}
+assert('4'^a == '4'); checkcap{"pow", '4', a}
+assert(#a == a); checkcap{"len", a, a}
+assert(~a == a); checkcap{"bnot", a, a}
+assert(a << 3 == a); checkcap{"shl", a, 3}
+assert(1.5 >> a == 1.5); checkcap{"shr", 1.5, a}
+
+-- for comparison operators, all results are true
+assert(5.0 > a); checkcap{"lt", a, 5.0}
+assert(a >= 10); checkcap{"le", 10, a}
+assert(a <= -10.0); checkcap{"le", a, -10.0}
+assert(a < -10); checkcap{"lt", a, -10}
+
+
+-- test for rawlen
+t = setmetatable({1,2,3}, {__len = function () return 10 end})
+assert(#t == 10 and rawlen(t) == 3)
+assert(rawlen"abc" == 3)
+assert(not pcall(rawlen, io.stdin))
+assert(not pcall(rawlen, 34))
+assert(not pcall(rawlen))
+
+-- rawlen for long strings
+assert(rawlen(string.rep('a', 1000)) == 1000)
+
+
+t = {}
+t.__lt = function (a,b,c)
+  collectgarbage()
+  assert(c == nil)
+  if type(a) == 'table' then a = a.x end
+  if type(b) == 'table' then b = b.x end
+ return a<b, "dummy"
+end
+
+t.__le = function (a,b,c)
+  assert(c == nil)
+  if type(a) == 'table' then a = a.x end
+  if type(b) == 'table' then b = b.x end
+ return a<=b, "dummy"
+end
+
+t.__eq = function (a,b,c)
+  assert(c == nil)
+  if type(a) == 'table' then a = a.x end
+  if type(b) == 'table' then b = b.x end
+ return a == b, "dummy"
+end
+
+function Op(x) return setmetatable({x=x}, t) end
+
+local function test); assert(f:read(1) == "X")
+assert(f:read("n") == 234e13); assert(f:read(1) == "E")
+assert(f:read("n") == 0Xdeadbeefdeadbeef); assert(f:read(2) == "x\n")
+assert(f:read("n") == 0x1.13aP3); assert(f:read(1) == "e")
+
+do   -- attempt to read too long number
+  assert(not f:read("n"))  -- fails
+  local s = f:read("L")   -- read rest of line
+  assert(string.find(s, "^00*\n$"))  -- lots of 0's left
+end
+
+assert(not f:read("n")); assert(f:read(2) == "e+")
+assert(not f:read("n")); assert(f:read(1) == ";")
+assert(not f:read("n")); assert(f:read(2) == "-;")
+assert(not f:read("n")); assert(f:read(1) == "X")
+assert(not f:read("n")); assert(f:read(1) == ";")
+assert(not f:read("n")); assert(not f:read(0))   -- end of file
+assert(f:close())
+assert(os.remove(file))
+
+
+-- test line generators
+assert(not pcall(io.lines, "non-existent-file"))
+assert(os.rename(otherfile, file))
+io.output(otherfile)
+local n = 0
+local f = io.lines(file)
+while f() do n = n + 1 end;
+assert(n == 6)   -- number of lines in the file
+checkerr("file is already closed", f)
+checkerr("file is already closed", f)
+-- copy from file to otherfile
+n = 0
+for l in io.lines(file) do io.write(l, "\n"); n = n + 1 end
+io.close()
+assert(n == 6)
+-- copy from otherfile back to file
+local f = assert(io.open(otherfile))
+assert(io.type(f) == "file")
+io.output(file)
+assert(not io.output():read())
+n = 0
+for l in f:lines() do io.write(l, "\n"); n = n + 1 end
+assert(tostring(f):sub(1, 5) == "file ")
+assert(f:close()); io.close()
+assert(n == 6)
+checkerr("closed file", io.close, f)
+assert(tostring(f) == "file (closed)")
+assert(io.type(f) == "closed file")
+io.input(file)
+f = io.open(otherfile):lines()
+n = 0
+for l in io.lines() do assert(l == f()); n = n + 1 end
+f = nil; collectgarbage()
+assert(n == 6)
+assert(os.remove(otherfile))
+
+do  -- bug in 5.3.1
+  io.output(otherfile)
+  io.write(string.rep("a", 300), "\n")
+  io.close()
+  local t ={}; for i = 1, 250 do t[i] = 1 end
+  t = {io.lines(otherfile, table.unpack(t))()}
+  -- everything ok here
+  assert(#t == 250 and t[1] == 'a' and t[#t] == 'a')
+  t[#t + 1] = 1    -- one too many
+  checkerr("too many arguments", io.lines, otherfile, table.unpack(t))
+  collectgarbage()   -- ensure 'otherfile' is closed
+  assert(os.remove(otherfile))
+end
+
+io.input(file)
+do  -- test error returns
+  local a,b,c = io.input():write("xuxu")
+  assert(not a and type(b) == "string" and type(c) == "number")
+end
+checkerr("invalid format", io.read, "x")
+assert(io.read(0) == "")   -- not eof
+assert(io.read(5, 'l') == '"alo"')
+assert(io.read(0) == "")
+assert(io.read() == "second line")
+local x = io.input():seek()
+assert(io.read() == "third line ")
+assert(io.input():seek("set", x))
+assert(io.read('L') == "third line \n")
+assert(io.read(1) == "X")
+assert(io.read(string.len"fourth_line") == "fourth_line")
+assert(io.input():seek("cur", -string.len"fourth_line"))
+assert(io.read() == "fourth_line")
+assert(io.read() == "")  -- empty line
+assert(io.read('n') == 3450)
+assert(io.read(1) == '\n')
+assert(not io.read(0))  -- end of file
+assert(not io.read(1))  -- end of file
+assert(not io.read(30000))  -- end of file
+assert(({io.read(1)})[2] == undef)
+assert(not io.read())  -- end of file
+assert(({io.read()})[2] == undef)
+assert(not io.read('n'))  -- end of file
+assert(({io.read('n')})[2] == undef)
+assert(io.read('a') == '')  -- end of file (OK for 'a')
+assert(io.read('a') == '')  -- end of file (OK for 'a')
+collectgarbage()
+print('+')
+io.close(io.input())
+checkerr(" input file is closed", io.read)
+
+assert(os.remove(file))
+
+local t = '0123456789'
+for i=1,10 do t = t..t; end
+assert(string.len(t) == 10*2^10)
+
+io.output(file)
+io.write("alo"):write("\n")
+io.close()
+checkerr(" output file is closed", io.write)
+local f = io.open(file, "a+b")
+io.output(f)
+collectgarbage()
+
+assert(io.write(' ' .. t .. ' '))
+assert(io.write(';', 'end of file\n'))
+f:flush(); io.flush()
+f:close()
+print('+')
+
+io.input(file)
+assert(io.read() == "alo")
+assert(io.read(1) == ' ')
+assert(io.read(string.len(t)) == t)
+assert(io.read(1) == ' ')
+assert(io.read(0))
+assert(io.read('a') == ';end of file\n')
+assert(not io.read(0))
+assert(io.close(io.input()))
+
+
+-- test errors in read/write
+do
+  local function ismsg (m)
+    -- error message is not a code number
+    return (type(m) == "string" and not tonumber(m))
+  end
+
+  -- read
+  local f = io.open(file, "w")
+  local r, m, c = f:read()
+  assert(not r and ismsg(m) and type(c) == "number")
+  assert(f:close())
+  -- write
+  f = io.open(file,(c)+B(d)+B(e)+B(f)+B(g)+(100*B(h))
+end
+
+assert(count(3) == 2)
+assert(count('alo') == 1)
+assert(count('32') == 2)
+assert(count({}) == 1)
+assert(count(print) == 2)
+assert(count(function () end) == 1)
+assert(count(nil) == 1)
+assert(count(io.stdin) == 1)
+assert(count(nil, 15) == 100)
+
+
+-- testing lua_to...
+
+local function to (s, x, n)
+  n = n or 2
+  return T.testC(string.format("%s %d; return 1", s, n), x)
+end
+
+local null = T.pushuserdata(0)
+local hfunc = string.gmatch("", "")    -- a "heavy C function" (with upvalues)
+assert(debug.getupvalue(hfunc, 1))
+assert(to("tostring", {}) == nil)
+assert(to("tostring", "alo") == "alo")
+assert(to("tostring", 12) == "12")
+assert(to("tostring", 12, 3) == nil)
+assert(to("objsize", {}) == 0)
+assert(to("objsize", {1,2,3}) == 3)
+assert(to("objsize", "alo\0\0a") == 6)
+assert(to("objsize", T.newuserdata(0)) == 0)
+assert(to("objsize", T.newuserdata(101)) == 101)
+assert(to("objsize", 124) == 0)
+assert(to("objsize", true) == 0)
+assert(to("tonumber", {}) == 0)
+assert(to("tonumber", "12") == 12)
+assert(to("tonumber", "s2") == 0)
+assert(to("tonumber", 1, 20) == 0)
+assert(to("topointer", 10) == null)
+assert(to("topointer", true) == null)
+assert(to("topointer", nil) == null)
+assert(to("topointer", "abc") ~= null)
+assert(to("topointer", string.rep("x", 10)) ==
+       to("topointer", string.rep("x", 10)))    -- short strings
+do    -- long strings
+  local s1 = string.rep("x", 300)
+  local s2 = string.rep("x", 300)
+  assert(to("topointer", s1) ~= to("topointer", s2))
+end
+assert(to("topointer", T.pushuserdata(20)) ~= null)
+assert(to("topointer", io.read) ~= null)           -- light C function
+assert(to("topointer", hfunc) ~= null)        -- "heavy" C function
+assert(to("topointer", function () end) ~= null)   -- Lua function
+assert(to("topointer", io.stdin) ~= null)   -- full userdata
+assert(to("func2num", 20) == 0)
+assert(to("func2num", T.pushuserdata(10)) == 0)
+assert(to("func2num", io.read) ~= 0)     -- light C function
+assert(to("func2num", hfunc) ~= 0)  -- "heavy" C function (with upvalue)
+a = to("tocfunction", math.deg)
+assert(a(3) == math.deg(3) and a == math.deg)
+
+
+print("testing panic function")
+do
+  -- trivial error
+  assert(T.ch

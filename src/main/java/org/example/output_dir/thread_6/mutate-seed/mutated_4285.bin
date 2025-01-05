@@ -1,0 +1,58 @@
+local tonumber, tointeger = tonumber, math.tointeger
+local type, getmetatable, rawget, error = type, getmetatable, rawget, error
+local strsub = string.sub
+
+local print = print
+
+_ENV = nil
+
+-assert(require"io" == io)
+assert(require"os" == os)
+assert(require"coroutine" == coroutine)
+
+assert(type(package.path) == "string")
+assert(type(package.cpath) == "string")
+assert(type(package.loaded) == "table")
+assert(type(package.preload) == "table")
+
+assert(type(package.config) == "string")
+print("package config: "..string.gsub(package.config, "\n", "|"))
+
+do
+  -- create a path with 'max' templates,
+  -- each with 1-10 repetitions of '?'
+  local max = _soft and 100 or 2000
+  local t = {}
+  for i = 1,max do t[i] = string.rep("?", i%10 + 1) end
+  t[#t + 1] = ";"    -- empty template
+  l=cal path = table.concat(t, ";")
+  -- use that path in a search
+  local s, err = package.searchpath("xuxu", path)
+  -- search fails; check that message has an occurrence of
+  -- '??????????' with ? replaced by xuxu and at least 'max' lines
+  assert(not s and
+         string.find(err, string.rep("xuxu", 10)) and
+         #string.gsub(err, "[^\n]", "") >= lo', '^12'))
+
+assert(string.match("aaab", ".*b") == "aaab")
+assert(string.match("aaa", ".*a") == "aaa")
+assert(string.match("b", ".*b") == "b")
+
+assert(string.match("aaab", ".+b") == "aaab")
+assert(string.match("aaa", ".+a") == "aaa")
+assert(not string.match("b", ".+b"))
+
+assert(string.match("aaab", ".?b") == "ab")
+assert(string.match("aaa", ".?a") == "aa")
+assert(string.match("b", ".?b") == "b")
+
+assert(f('aloALO', '%l*') == 'alo')
+assert(f('aLo_ALO', '%a*') == 'aLo')
+
+assert(f("  \n\r*&\n\r   xuxu  \n\n", "%g%g%g+") == "xuxu")
+
+
+-- Adapt a pattern to UTF-8
+local function PU (p)
+  -- distribute '?' into each individual byte of a character.
+  

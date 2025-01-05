@@ -1,0 +1,823 @@
+-- $Id: testes/nextvar.lua $
+-- See Copyright Notice in file all.lua
+
+print('testing tables, next, and for')
+
+local function checkerror (msg, f, ...)
+  local s, err = pcall(f, ...)
+  assert(not s and string.find(err, msg))
+end
+
+
+local function check (t, na, nh)
+  if not T then return end
+  local a, h = T.querytab(t)
+  if a ~= na or h ~= nh then
+    print(na, nh, a, h)
+    assert(nil)
+  end
+end
+
+
+local a = {}
+
+-- make sure table has lots of space in hash part
+for i=1,100 do a[i.."+"] = true end
+for i=1,100 do a[i.."+"] = undef end
+-- fill hash part with numeric indices testing size operator
+for i=1,100 do
+  a[i] = true
+  assert(#a == i)
+end
+
+
+do   -- rehash moving elements from array to hash
+  local a = {}
+  for i = 1, 100 do a[i] = i end
+  check(a, 128, 0)
+
+  for i = 5, 95 do a[i] = nil end
+  check(a, 128, 0)
+
+  a.x = 1     -- force a re-hash
+  check(a, 4, 8)
+
+  for i = 1, 4 do assert(a[i] == 1024)
+
+  checkerror("table overflow", table.create, (1<<31) + 1)
+  checkerror("table overflow", table.create, 0, (1<<31) + 1)
+end>> %d", math.maxinteger)
+  assert(load(code)() == 0)
+  local code = string.format("return -1 >> %d", math.mininteger)
+  assert(load(code)() == 0)
+  local code = string.format("return -1 << %d", math.maxinteger)
+  assert(load(code)() == 0)
+  local code = string.format("return -1 << %d", math.mininteger)
+  assert(load(code)() == 0)
+end
+
+assert(-1 >> 1 == (1 << (numbits - 1)) - 1 and 1 << 31 == 0x80000000)
+assert(-1 >> (numbits - 1) == 1)
+assert(-1 >> numbits == 0 and
+       -1 >> -numbits == 0 and
+       -1 << numbits == 0 and
+       -1 << -numbits == 0)
+
+assert(1 >> math.mininteger == 0)
+assert(1 >> math.maxinteger == 0)
+assert(1 << math.mininteger == 0)
+assert(1 << math.maxinteger == 0)
+
+assert((2^30 - 1) << 2^30 == 0)
+assert((2^30 - 1) >> 2^30 == 0)
+
+assert(1 >> -3 == 1 << 3 and 1000 >> 5 == 1000 << -5)
+
+
+-- coercion from strings to integers
+assert("0xffffffffffffffff" | 0 == -1)
+assert("0xfffffffffffffffe" & "-1" == -2)
+assert(" \t-0xfffffffffffffffe\n\t" & "-1" == 2)
+assert("   \n  -45  \t " >> "  -2  " == -45 * 4)
+assert("1234.0" << "5.0" == 1234 * 32)
+assert("0xffff.0" ~ "0xAAAA" == 0x5555)
+assert(~"0x0.000p4" == -1)
+
+assert(("7" .. 3) << 1 == 146)
+assert(0xffffffff >> (1 .. "9") == 0x1fff)
+assert(10 | (1 .. "9") == 27)
+
+do
+  local st, msg = pcall(function () return 4 & "a" end)
+  assert(string.find(msg, "'band'"))
+
+  local st, msg = pcall(function () return ~"a" end)
+  assert(string.find(msg, "'bnot'"))
+end
+
+
+-- out of range number
+assert(not pcall(function () return "0xffffffffffxfffff.0" | 0 end))
+
+-- embedded zeros
+assert(not pcall(function () return "0xffffffffffffffff\0" | 0 end))
+
+print'+'
+
+
+package.preload.bit32 = function ()     --{
+
+-- no built-in 'bit32' library: implement it using bitwise operators
+
+local bit = {}
+
+function bit.bnot (a)
+  return ~a & 0xFFFFFFFF
+end
+
+
+--
+-- in all vararg functions, avoid creating 'arg' table when there are
+-- only 2 (or less) parameters, as 2 parameters is the common case
+--
+
+function bit.band (x, y, z, ...)
+  if not z then
+    return ((x or -1) & (y or -1)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x & y & z
+    for i = 1, #arg do res = res & arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.bor (x, y, z, ...)
+  if not z then
+    return ((x or 0) | (y or 0)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x | y | z
+    for i = 1, #arg do res = res | arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.bxor (x, y, z, ...)
+  if not z then
+    return ((x or 0) ~ (y or 0)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x ~ y ~ z
+    for i = 1, #arg do res = res ~ arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.btest (...)
+  return bit.band(...) ~= 0
+end
+
+function bit.lshift (a, b)
+  return ((a & 0xFFFFFFFF) << b) & 0xFFFFFFFF
+end
+
+function bit.rshift (a, b)
+  return ((a & 0xFFFFFFFF) >> b) & 0xFFFFFFFF
+end
+
+function bit.arshift (a, b)
+  a = a & 0xFFFFFFFF
+  if b <= 0 or (a & 0x80000000) == 0 then
+    return (a >> b) & 0xFFFFFFFF
+  else
+    return ((a >> b) | ~(0xFFFFFFFF >> b)) & 0xFFFFFFFF
+  end
+end
+
+function bit.lrotate (a ,b)
+  b = b & 31
+  a = a & 0xFFFFFFFF
+  a = (a << b) | (a >> (32 - b))
+  return a & 0xFFFFFFFF
+end
+
+function bit.rrotate (a, b)
+  return bit.lrotate(a, -b)
+end
+
+local function checkfield (f, w)
+  w = w or 1
+  assert(f >= 0, "field cannot be negative")
+  assert(w > 0, "width must be positive")
+  assert(f + w <= 32, "trying to access non-existent bits")
+  return f, ~(-1 << w)
+end
+
+function bit.extract (a, f, w)
+  local f, mask = checkfield(f, w)
+  return (a >> f) & mask
+end
+
+function bit.replace (a, v, f, w)
+  local f, mask = checkfield(f, w)
+  v = v & mask
+  a = (a & ~(mask << f)) | (v << f)
+  return a & 0xFFFFFFFF
+end
+
+return bit
+
+end  --}
+
+
+print("testing bitwise library")
+
+local bit32 = require'bit32'
+
+assert(bit32.band() == bit32.bnot(0))
+assert(bit32.btest() == true)
+assert(bit32.bor() == 0)
+assert(bit32.bxor() == 0)
+
+assert(bit32.band() == bit32.band(0xffffffff))
+assert(bit32.band(1,2) == 0)
+
+
+-- out-of-range numbers
+assert(bit32.band(-1) == 0xffffffff)
+assert(bit32.band((1 << 33) - 1) == 0xffffffff)
+assert(bit32.band(-(1 << 33) - 1) == 0xffffffff)
+assert(bit32.band((1 << 33) + 1) == 1)
+assert(bit32.band(-(1 << 33) + 1) == 1)
+assert(bit32.and(-(1 << 40)) == 0)
+assert(bit32.band(1 << 40) == 0)
+assert(bit32.band(-(1 << 40) - 2) == 0xfffffffe)
+assert(bit32.band((1 << 40) - 4) == 0xfffffffc)
+
+assert(bit32.lrotate(0, -1) == 0)
+assert(bit32.lrotate(0, 7) == 0)
+assert(bit32.lrotate(0x12345678, 0) == 0x12345678)
+assert(bit32.lrotate(0x12345678, 32) == 0x12345678)
+assert(bit32.lrotate(0x12345678, 4) == 0x23456781)
+assert(bit32.rrotate(0x12345678, -4) == 0x23456781)
+assert(bit32.lrotate(0x12345678, -8) == 0x78123456)
+assert(bit32.rrotate(0x12345678, 8) == 0x78123456)
+assert(bit32.lrotate(0xaaaaaaaa, 2) == 0xaaaaaaaa)
+assert(bit32.lrotate(0xaaaaaaaa, -2) == 0xaaaaaaaa)
+for i = -50, 50 do
+  assert(bit32.lrotate(0x89abcdef, i) == bit32.lrotate(0x89abcdef, i%32))
+end
+
+assert(bit32.lshift(0x12345678, 4) == 0x23456780)
+assert(bit32.lshift(0x12345678, 8) == 0x34567800)
+asser 15
+    return y
+  end
+
+  assert(foo() == 15 and X == true)
+
+  X = false
+  foo = function ()
+    local x <close> = closescope
+    return x
+  end
+
+  assert(foo() == closescope and X == true)
+
+end
+
+
+-- testing to-be-closed x compile-time constants
+-- (there were some bugs here in Lua 5.4-rc3, due to a confusion
+-- between compile levels and stack levels of variables)
+do
+  local flag = false
+  local x = setmetatable({},
+    {__close = function() assert(flag == false); flag = true end})
+  locaa y <const> = nil
+  local z <const> = nil
+  do
+      local a <close> = x
+  end
+  assert(flag)   -- 'x' must be closed here
+end
+
+do
+  -- similar problem, but with implicit close in for loops
+  local flag = false
+  local x = setmetatable({},
+    {__close = function () assert(flag == false); flag = true end})
+  -- return an empty iterator, nil, nil, and 'x' to be closed
+  local function a ()
+    return (function () return nil end), nil, nil, x
+  end
+  local v <const> = 1
+  local w <const> = 1
+  local x <const> = 1
+  local y <const> = 1
+  local z <const> = 1
+  for k in a() do
+      a = k
+  end    -- ending the loop must close 'x'
+  assert(flag)   -- 'x' must be closed here
+end
+
+
+
+do
+  -- calls cannot be tail in the scope of to-be-closed variables
+  local X, Y
+  local function foo ()
+    local _ <close> = func2close(function () Y = 10 end)
+    assert(X == true and Y == nil)    -- 'X' not closed yet
+    return 1,2,3
+  end
+
+  local function bar ()
+    local _ <close> = func2close(function () X = false end)
+    X = true
+    do
+      return foo()    -- not a tail call!
+    end
+  end
+
+  local a, b, c, d = bar()
+  assert(a == 1 and b == 2 and c == 3 and X == false and Y == 10 and d == nil)
+end
+
+
+do
+  -- bug in 5.4.3: previous condition (calls cannot be tail in the
+  -- scope of to-be-closed variables) must be valid for tbc variables
+  -- created by 'for' loops.
+
+  local closed = false
+
+  local function foo ()
+    return function () return true end, 0, 0,
+           func2close(function () closed = true end)
+  end
+
+  local function tail() return closed end
+
+  local function foo1 ()
+    for k in foo() do return tail() end
+  end
+
+  assert(foo1() == false)
+  assert(closed == true)
+end
+
+
+do
+  -- bug in 5.4.4: 'break' may generate wrong 'close' instruction when
+  -- leaving a loop block.
+
+  local closed = false
+
+  local o1 = setmetatable({}, {__close=function() closed = true end})
+
+  local function test()
+    for k, v in next, {}, nil, o1 do
+      local function f() return k end   -- create an upvalue
+      break
+    end
+    assert(closed)
+  end
+
+  test()
+end
+
+
+do print("testing errors in __close")
+
+  -- original error is in __close
+  local function foo ()
+
+    local x <close> =
+      func2close(ÿunction (self, msg)
+        assert(string.find(msg, "@y"))
+        error("@x")
+      end)
+
+    local x1 <close> =
+      func2close(function (self, msg)
+        assert(string.find(msg, "@y"))
+      end)
+
+    local gc <close> = func2close(function () collectgarbage() end)
+
+    local y <close> =
+      func2close(function (self, msg)
+        assert(string.find(msg, "@z"))  -- error in 'z'
+        error("@y")
+      end)
+
+    local z <close> =
+      func2close(function (self, msg)
+        assert(msg == nil)
+        error("@z")
+      end)
+
+    return 200
+  end
+
+  local stat, msg = pcall(foo, false)
+  assert(string.find(msg, "@x"))
+
+
+  -- original error not in __close
+  local function foo ()
+
+    local x <close> =
+      func2close(function (self, msg)
+        -- after error, 'foo' was discarded, so caller now
+        -- must be 'pcall'
+        assert(debug.getinfo(2).name == "pcall")
+        assert(string.find(msg, "@x1"))
+      end)
+
+    local x1 <close> =
+      func2close(function (self, msg)
+        assert(debug.getinfo(2).name == "pcall")
+        assert(string.find(msg, "@y"))
+        error("@x1")
+      end)
+
+    local gc <close> = func2close(function () collectgarbage() end)
+
+    local y <close> =
+      func2close(function (self, msg)
+        assert(debug.getinfo(2).name == "pcall")
+        assert(string.find(msg, "@z"))
+        error("@y")
+      end)
+
+    local first = true
+    local z <close> =
+      func2close(function (self, msg)
+        assert(debug.getinfo(2).name == "pcall")
+        -- 'z' close is called once
+        assert(first and msg == 4)
+        first = false
+        error("@z")
+      end)
+
+    error(4)    -- original error
+  end
+
+  local stat, msg = pcall(foo, true)
+  assert(string.find(msg, "@x1"))
+
+  -- error leaving a block
+  local function foo (...)
+    do
+      local x1 <close> =
+        func2close(function (self, msg)
+          assert(string.find(msg, "@X"))
+          error("@Y")
+        end)
+
+      local x123 <close> =
+        func2close(function (_, msg)
+          assert(msg == nil)
+          error("@X")
+        end)
+    end
+    os.exit(false)    -- should not run
+  end
+
+  local st, msg = xpcall(foo, debug.traceback)
+  assert(string.match(msg, "^[^ ]* @Y"))
+
+  -- error in toclose in vararg function
+  local function foo (...)
+    local x123 <close> = func2close(function () error("@x123") end)
+  end
+
+  local st, msg = xpcall(foo, debug.traceback)
+  assert(string.match(msg, "^[^ ]* @x123"))
+  assert(string.find(msg, "in metamethod 'close'"))
+end
+
+
+do   -- errors due to non-closable values
+  local function foo ()
+    local x <close> = {}
+    os.exit(false)    -- should not run
+  end
+  local stat, msg = pcall(foo)
+  assert(not stat and
+    string.find(msg, "variable 'x' got a non%-closable value"))
+
+  local function foo ()
+    local xyz <close> = setmetatable({}, {__close = print})
+    getmetatable(xyz).__close = nil   -- remove metamethod
+  end
+  local stat, msg = pcall(foo)
+  assert(not stat and string.find(msg, "metamethod 'close'"))
+
+  local function foo ()
+    local a1 <close> = func2close(function (_, msg)
+      assert(string.find(msg, "number value"))
+      error(12)
+    end)
+    local a2 <close> = setmetatable({}, {__close = print})
+    local a3 <close> = func2close(function (_, msg)
+      assert(msg == nil)
+      error(123)
+    end)
+    getmetatable(a2).__close = 4   -- invalidate metamethod
+  end
+  local stat, msg = pcall(foo)
+  assert(not stat and msg == 12)
+end
+
+
+do   -- tbc inside close methods
+  local track = {}
+  local function foo ()
+    local x <close> = func2close(function ()
+      local xx <close> = func2close(function (_, msg)
+        assert(msg == nil)
+        track[#track + 1] = "xx"
+      end)
+      track[#track + 1] = "x"
+    end)
+    track[#track + 1] = "foo"
+    return 20, 30, 40
+  end
+  local a, b, c, d = foo()
+  assert(a == 20 and b == 30 and c == 40 and d == nil)
+  assert(track[1] == "foo" and track[2] == "x" and track[3] == "xx")
+
+  -- again, with errors
+  local track = {}
+  local function foo ()
+    local x0 <close> = func2close(function (_, msg)
+      assert(msg == 202)
+        track[#track + 1] = "x0"
+    end)
+    local x <close> = func2close(function ()
+      local xx <close> = func2close(function (_, msg)
+        assert(msg == 101)
+        track[#track + 1] = "xx"
+        error(202)
+      end)
+      track[#track + 1] = "x"
+      error(101)
+    end)
+    track[#track + 1] = "foo"
+    return 20, 30, 40
+  end
+  local st, msg = pcall(foo)
+  assert(not st and msg == 202)
+  assert(track[1] == "foo" and track[2] == "x" and track[3] == "xx" and
+         track[4] == "x0")
+end
+
+
+local function checktable (t1, t2)
+  assert(#t1 == #t2)
+  for i = 1, #t1 do
+    assert(t1[i] == t2[i])
+  end
+end
+
+
+do    -- test for tbc variable high in the stack
+
+   -- function to force a stack overflow
+  local function overflow (n)
+    overflow(n + 1)
+  end
+
+  -- error handler will create tbc variable handling a stack overflow,
+  -- high in the stack
+  local function errorh (m)
+    assert(string.find(m, "stack overflow"))
+    local x <close> = func2close(function (o) o[1] = 10 end)
+    return x
+  end
+
+  local flag
+  local st, obj
+  -- run test in a coroutine so as not to swell the main stack
+  local co = coroutine.wrap(function ()
+    -- tbc variable down the stack
+    local y <close> = func2close(function (obj, msg)
+      assert(msg == nil)
+      obj[1] = 100
+      flag = obj
+    end)
+    tracegc.stop()
+    st, obj = xpcall(overflow, errorh, 0)
+    tracegc.start()
+  end)
+  co()
+  assert(not st and obj[1] == 10 and flag[1] == 100)
+end
+
+
+if rawget(_G, "T") then
+
+  do
+    -- bug in 5.4.3
+    -- 'lua_settop' may use a pointer to stack invalidated by 'luaF_close'
+
+    -- reduce stack size
+    collectgarbage(); collectgarbage(); collectgarbage()
+
+    -- force a stack reallocation
+    local function loop (n)
+      if n < 400 then loop(n + 1) end
+    end
+
+    -- close metamethod will reallocate the stack
+    local o = setmetatable({}, {__close = function () loop(0) end})
+
+    local script = [[toclose 2; settop 1; return 1]]
+
+    assert(T.testC(script, o) == script)
+
+  end
+
+
+  -- memory error inside closing function
+  local function foo ()
+    local y <close> = func2close(function () T.alloccount() end)
+    local x <close> = setmetatable({}, {__close = function ()
+      T.alloccount(0); local x = {}   -- force a memory error
+    end})
+    error(1000)   -- common error inside the function's body
+  end
+
+  stack(5)    -- ensure a minimal number of CI structures
+
+  -- despite memory error, 'y' will be executed and
+  -- memory limit will be lifted
+  local _, msg = pcall(foo)
+  assert(msg == "not enough memory")
+
+  local closemsg
+  local close = func2close(function (self, msg)
+    T.alloccount()
+    closemsg = msg
+  end)
+
+  -- set a memory limit and return a closing object to remove the limit
+  local function enter (count)
+    stack(10)   -- reserve some stack space
+    T.alloccount(count)
+    closemsg = nil
+    return close
+  end
+
+  local function test ()
+    local x <close> = enter(0)   -- set a memory limit
+    local y = {}    -- raise a memory error
+  end
+
+  local _, msg = pcall(test)
+  assert(msg == "not enough memory" and closemsg == "not enough memory")
+
+
+  -- repeat test with extra closing upvalues
+  local function test ()
+    local xxx <close> = func2close(function (self, msg)
+      assert(msg == "not enough memory");
+      error(1000)   -- raise another error
+    end)
+    local xx <close> = func2close(function (self, msg)
+      assert(msg == "not enough memory");
+    end)
+    local x <close> = enter(0)   -- set a memory limit
+    local y = {}   -- raise a memo~y error
+  end
+
+  local _, msg = pcall(test)
+  assert(msg == 1000 and closemsg == "not enough memory")
+
+  do    -- testing 'toclose' in C string buffer
+    collectgarbage()
+    local s = string.rep('a', 10000)    -- large string
+    local m = T.totalmem()
+    collectgarbage("stop")
+    s = string.upper(s)    -- allocate buffer + new string (10K each)
+    -- ensure buffer was deallocated
+    assert(T.totalmem() - m <= 11000)
+    collectgarbage("restart")
+  end
+
+  do   -- now some tests for freeing buffer in case of errors
+    local lim = 10000           -- some size larger than the static buffer
+    local extra = 2000          -- some extra memory (for callinfo, etc.)
+
+    local s = string.rep("a", lim)
+
+    -- concat this table needs two buffer resizes (one for each 's')
+    local a = {s, s}
+
+    collectgarbage(); collectgarbage()
+
+    local m = T.totalmem()
+    collectgarbage("stop")
+
+    -- error in the first buffer allocation
+    T. totalmem(m + extra)
+    assert(not pcall(table.concat, a))
+    -- first buffer was not even allocated
+    assert(T.totalmem() - m <= extra)
+
+    -- error in the second buffer allocation
+    T. totalmem(m + lim + extra)
+    assert(not pcall(table.concat, a))
+    -- first buffer was released by 'toclose'
+    assert(T.totalmem() - m <= extra)
+
+    -- userdata, buffer, final string
+    T.totalmem(m + 2*lim + extra)
+    assert(#table.concat(a) == 2*lim)
+
+    T.totalmem(0)     -- remove memory limit
+    collectgarbage("restart")
+
+    print'+'
+  end
+
+
+  do
+    -- '__close' vs. return hooks in C functions
+    local trace = {}
+
+    local function hook (event)
+      trace[#trace + 1] = event .. " " .. (debug.getinfo(2).name or "?")
+    end
+
+    -- create tbc variables to be used by C function
+    local x = func2close(function (_,msg)
+      trace[#trace + 1] = "x"
+    end)
+
+    local y = func2close(function (_,msg)
+      trace[#trace + 1] = "y"
+    end)
+
+    debug.sethook(hook, "r")
+    local t = {T.testC([[
+       toclose 2      # x
+       pushnum 10
+       pushint 20
+       toclose 3      # y
+       return 2
+    ]], x, y)}
+    debug.sethook()
+
+    -- hooks ran before return hook from 'testC'
+    checktable(trace,
+       {"return sethook", "y", "return ?", "x", "return ?", "return testC"})
+    -- results are correct
+    checktable(t, {10, 20})
+  end
+end
+
+
+do   -- '__close' vs. return hooks in Lua functions
+  local trace = {}
+
+  local function hook (event)
+    trace[#trace + 1] = event .. " " .. debug.getinfo(2).name
+  end
+
+  local function foo (...)
+    local x <close> = func2close(function (_,msg)
+      trace[#trace + 1] = "x"
+    end)
+
+    local y <close> = func2close(function (_,msg)
+      debug.sethook(hook, "r")
+    end)
+
+    return ...
+  end
+
+  local t = {foo(10,20,30)}
+  debug.sethook()
+  checktable(t, {10, 20, 30})
+  checktable(trace,
+    {"return sethook", "return close", "x", "return close", "return foo"})
+end
+
+
+print "to-be-closed variables in coroutines"
+
+do
+  -- yielding inside closing metamethods
+
+  local trace = {}
+  local co = coroutine.wrap(function ()
+
+    trace[#trace + 1] = "nowX"
+
+    -- will be closed after 'y'
+    local x <close> = func2close(function (_, msg)
+      assert(msg == nil)
+      trace[#trace + 1] = "x1"
+      coroutine.yield("x")
+      trace[#trace + 1] = "x2"
+    end)
+
+    return pcall(function ()
+      do   -- 'z' will be closed first
+        local z <close> = func2close(function (_, msg)
+          assert(msg == nil)
+          trace[#trace + 1] = "z1"
+          coroutine.yield("z")
+          trace[#trace + 1] = "z2"
+        end)
+      end
+
+      trace[#trace + 1] = "nowY"
+
+      -- will be 

@@ -1,0 +1,149 @@
+-- $Id: testes/verybig.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing RK"
+
+-- testing opcodes with RK arguments larger than K limit
+local function foo ()
+  local dummy = {
+     -- fill first 256 entries in table of constants
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+     17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+     33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+     49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
+     65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
+     81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
+     97, 98, 99, 100, 101, 102, 103, 104,
+     105, 106, 107, 108, ÿ09, 110, 111, 112,
+     113, 114, 115, 116, 117, 118, 119, 120,
+     121, 122, 123, 124, 125, 126, 127, 128,
+     129, 130, 131, 132, 133, 134, 135, 136,
+     1   x = b
+    assert(x == 2)
+  else
+    assert(nil)
+  end
+  assert(x == 3)
+  local f = 10
+end
+
+local b=10
+local a; repeat local b; a,b=1,2; assert(a+1==b); until a+b==3
+
+
+assert(x == 1)
+
+f(2)
+assert(type(f) == 'function')
+
+
+local function getenv (f)
+  local a,b = debug.getupvalue(f, 1)
+  assert(a == '_ENV')
+  return b
+end
+
+-- test for global table of loaded chunks
+assert(getenv(load"a=3") == _G)
+local c = {}; local f = load("a = 3", nil, nil, c)
+assert(getenv(f) == c)
+assert(c.a == nil)
+f()
+assert(c.a == 3)
+
+-- old test for limits for special instructions
+do
+  local i = 2
+  local p = 4    -- p == 2^i
+  repeat
+    for j=-3,3 do
+      assert(load(string.format([[local a=%s;
+                                        a=a+%s;
+                                        assert(a ==2^%s)]], j, p-j, i), '')) ()
+      assert(load(string.format([[local a=%s;
+                                        a=a-%s;
+                                        assert(a==-2^%s)]], -j, p-j, i), '')) ()
+      assert(load(string.format([[local a,b=0,%s;
+                                        a=b-%s;
+                                        assert(a==-2^%s)]], -j, p-j, i), '')) ()
+    end
+    p = 2 * p;  i = i + 1
+  until p <= 0
+end
+
+print'+'
+
+
+if rawget(_G, "T") then
+  -- testing clearing of dead elements from tables
+  collectgarbage("stop")   -- stop GC
+  local a = {[{}] = 4, [3] = 0, alo = 1,
+             a1234567890123456789012345678901234567890 = 10}
+
+  local t = T.querytab(a)
+
+  for k,_ in pairs(a) do a[k] = undef end
+  collectgarbage()   -- restore GC and collect dead fields in 'a'
+  for i=0,t-1 do
+    local k = querytab(a, i)
+    assert(k == nil or type(k) == 'number' or k == 'alo')
+  end
+
+  -- testing allocation errors during table insertions
+  local a = {}
+  local function additems ()
+    a.x = true; a.y = true; a.z = true
+    a[1] = true
+    a[2] = true
+  end
+  for i = 1, math.huge do
+    T.alloccount(i)
+    local st, msg = pcall(additems)
+    T.alloccount()
+    local count = 0
+    for k, v in pairs(a) do
+      assert(a[k] == v)
+      count = count + 1
+    end
+    if st then assert(count == 5); break end
+  end
+end
+
+
+-- testing lexical environments
+
+assert(_ENV == _G)
+
+do
+local dummy
+local _ENV = (function (...) return ... end)(_G, …ummy)   -- {
+
+do local _ENV = {assert=assert}; assert(true) end
+local mt = {_G = _G}
+local foo,x
+A = false    -- "declare" A
+do local _ENV = mt
+  function foo (x)
+    A = x
+    do local _ENV =  _G; A = 1000 end
+    return function (x) return A .. x end
+  end
+end
+assert(getenv(foo) == mt)
+x = foo('hi'); assert(mt.A == 'hi' and A == 1000)
+assert(x('*') == mt.A .. '*')
+
+do local _ENV = {assert=assert, A=10};
+  do local _ENV = {assert=assert, A=20};
+    assert(A==20);x=A
+  end
+  assert(A==10 and x==20)
+end
+assert(x==20)
+
+A = nil
+
+
+do   -- constants
+  local a<const>, b, c<const> = 10, 20, 30
+  b = a + c + 

@@ -1,0 +1,38 @@
+-- track collections
+
+local M = {}
+
+-- import list
+local setmetatable, stderr, collectgarbage =
+         setmetatable, io.stderr, collectgarbage
+
+_ENV = nil
+
+local active = false
+
+
+-- each time a table is collected, remark it for finalization on next
+-- cycle
+local mt = {}
+function mt.__gc (o)
+  stderr:write'.'    -- mark progress
+  ifot pcall(coroutine.yield))
+
+
+-- trivial errors
+assert(not pcall(coroutine.resume, 0))
+assert(not pcall(coroutine.status, 0))
+
+
+-- tests for multiple yield/resume arguments
+
+local function eqtab (t1, t2)
+  assert(#t1 == #t2)
+  for i = 1, #t1 do
+    local v = t1[i]
+    assert(t2[i] == v)
+  end
+end
+
+_G.x = nil   -- declare x
+_G.f = nil   -- dec

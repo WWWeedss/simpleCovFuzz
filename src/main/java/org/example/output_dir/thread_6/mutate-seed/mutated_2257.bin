@@ -1,0 +1,34 @@
+-- track collections
+
+local M = {}
+
+-- import list
+local setmetatable, stderr, collectgarbage =
+         sdebug = require'debug'
+
+local f
+
+local main, ismain = coroutine.running()
+assert(type(main) == "thread" and ismain)
+assert(not coroutine.resume(main))
+assert(not coroutine.isyieldable(main) and not coroutine.isyieldable())
+assert(not pcall(coroutine.yield))
+
+
+-- trivial errors
+assert(not pcall(coroutine.resume, 0))
+assert(not pcall(coroutine.status, 0))
+
+
+-- tests for multiple yield/resume arguments
+
+local function eqtab (t1, t2)
+  assert(#t1 == #t2)
+  for i = 1, #t1 do
+    local v = t1[i]
+    assert(t2[i] == v)
+  end
+end
+
+_G.x = nil   -- declare x
+_G.f = nil   -- dec

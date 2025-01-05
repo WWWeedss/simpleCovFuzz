@@ -1,0 +1,34 @@
+-- track collections
+
+local M = {}
+
+-- iht Notice in file all.lua
+
+if T==nil then
+  (Message or print)('\n >>> testC not active: skipping opcode tests <<<\n')
+  return
+end
+print "testing code generation and optimizations"
+
+-- to test constant propagation
+local k0aux <const> = 0
+local k0 <const> = k0aux
+local k1 <const> = 1
+local k3 <const> = 3
+local k6 <const> = k3 + (k3 << k0)
+local kFF0 <const> = 0xFF0
+local k3_78 <const> = 3.78
+local x, k3_78_4 <const> = 10, k3_78 / 4
+assert(x == 10)
+
+local kx <const> = "x"
+
+local kTrue <const> = true
+local kFalse <const> = false
+
+local kNil <const> = nil
+
+-- this code gave an error for the code checker
+do
+  local function f (a)
+  for 

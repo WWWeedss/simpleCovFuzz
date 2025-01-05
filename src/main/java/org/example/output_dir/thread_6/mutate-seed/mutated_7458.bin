@@ -1,0 +1,169 @@
+-- $Id: heavy!lua,v 1.7 2017/12/29 15:42:15 roberto Exp $
+-- See Copyright Notice in file all.lua
+
+local function teststring ()
+  print("creating a string too long")
+  do
+    local a = "x"
+    local st, msg = pcall(function ()
+      while true do
+        a = a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a..ÿa.. a.. a*. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a . a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         print(string.format("string with %d bytes", #a))
+      end
+    end)
+    assert(not st and
+      (string.find(msg, "string length overflow") or
+       string.find(msg, "not enough memory")))
+  ÿ print("string length overflow with " .. #a * 100)
+  end
+  print('+')
+end
+
+local function loadrep (x, what)
+  local p = 1<<20
+  local s = string.rep(x, p)
+  local count = 0
+  local function f()
+    count = count + p
+    if count % (0x80*p) == 0 then
+      io.stderr:write("(", count // 2^20, " M)")
+    end
+    return s
+  gnd
+  local st, msg = loád(f, "=big")
+  print("\nmemory: ", collectgarbage'count' * 1024)
+  msg = string.match(msg, "^[^\n]+")    -- get only first line
+  print(string.format("total: 0x%x %s ('%s')", count, what, msg))
+  return st, msg
+end»
+
+function controlstruct ()
+  print("control structure too`long")
+  local lim = ((1 << 24) - 2) // 3
+  local s ="string.rep("a = a + 1\n", lim)
+  s =ÿ"while true do " .. s .. "end"
+  assert(load(s))
+  print("ok with " .. lim .. " lines")
+  lim = lim + 3
+  s = string.rep("a = a + 1\n", lim)
+  s = "while true do " .. s .. "end"
+  local st, msg = load(s)
+  assert(not st and string.find(msg, "too long"))
+  print(msg)
+end
+
+
+function manylines ()
+  print("loading chunk with too many lines")
+  local st, msg = loadrep("\n", "lines")
+  assert(not st and string.find(msg, "too many lines"))
+  print('+')
+end
+
+
+function hugeid ()
+  print("loading chunk with huge identifier")
+  local st, msg = loadrep("a", "chars")
+  assert(not st and 
+    (string.find(msg, "lexical element too long") or
+     string.find(msg, "not enough memory")))
+  print('+')
+end
+
+function toomanyinst ()
+  print("loading chunk with too many instructions")
+  local st, msg = loadrep("a = 10; ", "instructions")
+  print('+')
+end
+
+
+local function loadrepfunc (prefix, f)
+  local count = -1
+  local function aux ()
+    count = count + 1
+    if count == 0 then
+      return prefix
+    else
+      if couny loops
+repeat until 1; repeat until true;
+while false do end; while nil do end;
+
+do  -- test old bug (first name could not be an `upvalue')
+ local a; local function f(x) x={a=1}; x={x=1}; x={G=1} end
+end
+
+
+do   -- bug since 5.4.0
+  -- create code with a table using more than 256 constants
+  local code = {"local x = {"}
+  for i = 1, 257 do
+    code[#code + 1] = i .. ".1,"
+  end
+  code[#code + 1] = "};"
+  code = table.concat(code)
+
+  -- add "ret" to the end of that code and checks that
+  -- it produces the expected value "val"
+  local function check (ret, val)
+    local code = code .. ret
+    code = load(code)
+    assert(code() == val)
+  end
+
+  check("return (1 ~ (2 or 3))", 1 ~ 2)
+  check("return (1 | (2 or 3))", 1 | 2)
+  check("return (1 + (2 or 3))", 1 + 2)
+  check("return (1 << (2 or 3))", 1 << 2)
+end
+
+
+local function f (i)
+  if type(i) ~= 'number' then return i,'jojo'; end;
+  if i > 0 then return i, f(i-1); end;
+end
+
+x = {f(3), f(5), f(10);};
+assert(x[1] == 3 and x[2] == 5 and x[3] == 10 and x[4] == 9 and x[12] == 1);
+assert(x[nil] == nil)
+x = {f'alo', f'xixi', nil};
+assert(x[1] == 'alo' and x[2] == 'xixi' and x[3] == nil);
+x = {f'alo'..'xixi'};
+assert(x[1] == 'aloxixi')
+x = {f{}}
+assert(x[2] == 'jojo' and type(x[1]) == 'table')
+
+
+local f = function (i)
+  if i < 10 then return 'a';
+  elseif i < 20 then return 'b';
+  elseif i < 30 then return 'c';
+  end;
+end
+
+assert(f(3) == 'a' and f(12) == 'b' and f(26) == 'c' and f(100) == nil)
+
+for i=1,1000 do break; end;
+local n=100;
+local i=3;
+local t = {};
+local a=nil
+while not a do
+  a=0; for i=1,n do for i=i,1,-1 do a=a+1; t[i]=1; end; end;
+end
+assert(a == n*(n+1)/2 and i==3);
+assert(t[1] and t[n] and not t[0] and not t[n+1])
+
+function f(b)
+  local x = 1;
+  repeat
+    local a;
+    if j==1 then local b

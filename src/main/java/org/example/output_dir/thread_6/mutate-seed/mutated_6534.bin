@@ -1,0 +1,435 @@
+-- $Id: testes/literals.lua $
+-- See Copyright Notice in file all.lua
+
+print('testing scanner')
+
+local debug = require "debug"
+
+
+local function dostring (x) return assert(load(x), "")() end
+
+dostring("x \v\f = \t\r 'a\0a' \v\f\f")
+assert(x == 'a\0a' and string.len(x) == 3)
+_G.x = nil
+
+-- escape sequences
+assert('\n\"\'\\' == [[
+
+"'\]])
+
+assert(string.find("\a\b\f\n\r\t\v", "^%c%c%c%c%c%c%c$"))
+
+-- assume ASCII just for tests:
+assert("\09912" == 'c12')
+assert("\99ab" == 'cab')
+assert("\099" == '\99')
+assert("\099\n" == 'c\10')
+assert('\0\0\0alo' == '\0' .. '\0\0' .. 'alo')
+
+assert(010 .. 020 .. -030 == "1020-30")
+
+-- hexadecimal escapes
+assert("\x00\x05\x10\x1f\x3C\xfF\xe8" == "\0\5\16\31\60\255\232")
+
+local function lexstring (x, y, n)
+  local f = assert(load('return ' .. x ..
+            ', require"debug".getinfo(1).currentline', ''))
+  local s, l = f()
+  assert(s == y and l == n)
+end
+
+lexstring("'abc\\z  \n   efg'", "abcefg", 2)
+lexstring("'abc\\z  \n\n\n'", "abc", 4)
+lexstring("'\\z  \n\t\f\v\n'",  "", 3)
+lexstring("[[\nalo\nalo\n\n]]", "alo\nalo\n\n", 5)
+lexstring("[[\nalo\ralo\n\n]]", "alo\nalo\n\n", 5)
+lexstring("[[\nalo\ralo\r\n]]", "alo\nalo\n", 4)
+lexstring("[[\ralo\n\ralo\r\n]]", "alo\nalo\n", 4)
+lexstring("[[alo]\n]alo]]", "alo]\n]alo", 2)
+
+assert("abc\z
+        def\z
+        ghi\z
+       " == 'abcdefghi')
+
+
+-- UTF-8 sequences
+assert("\u{0}\u{00000000}\x00\0" == string.char(0, 0, 0, 0))
+
+-- limits for 1-byte sequences
+assert("\u{0}\u{7F}" == "\x00\x7F")
+
+-- limits for 2-byte sequences
+assert("\u{80}\u{7FF}" == "\xC2\x80\xDF\xBF")
+
+-- limits for 3-byte sequences
+assert("\u{800}\u{FFFF}" ==   "\xE0\xA0\x80\xEF\xBF\xBF")
+
+-- limits for 4-byte sequences
+assert("\u{10000}\u{1FFFFF}" == "\xF0\x90\x80\x80\xF7\xBF\xBF\xBF")
+
+-- limits for 5-byte sequences
+assert("\u{200000}\u{3FFFFFF}" == "\xF8\x88\x80\x80\x80\xFB\xBF\xBF\xBF\xBF")
+
+-- limits for 6-byte sequences
+assert("\u{4000000}\u{7FFFFFFF}" ==
+       "\xFC\x84\x80\x80\x80\x80\xFD\xBF\xBF\xBF\xBF\xBF")
+
+
+-- Error in escape sequences
+local function lexerror (s, err)
+  local st, msg = load('return ' .. s, '')
+  if err ~= '<eof>' then err = err .. "'" end
+  assert(not st and string.find(msg, "near .-" .. err))
+end
+
+lexerror([["abc\x"]], [[\x"]])
+lexerror([["abc\x]], [[\x]])
+lexerror([["\x]], [[\x]])
+lexerror([["\x5"]], [[\x5"]])
+lexerror([["\x5]], [[\x5]])
+lexerror([["\xr"]], [[\xr]])
+lexerror([["\xr]], [[\xr]])
+lexerror([["\x.]], [[\x.]])
+lexerror([["\x8%"]], [[\x8%%]])
+lexerror([["\xAG]], [[\xAG]])
+lexerror([["\g"]], [[\g]])
+lexerror([["\g]], [[\g]])
+lexerror([["\."]], [[\%.]])
+
+lexerror([["\999"]], [[\999"]])
+lexerror([["xyz\300"]], [[\300"]])
+lexerror([["   \256"]], [[\256"]])
+
+-- errors in UTF-8 sequences
+lexerror([["abc\u{100000000}"]], [[abc\u{100000000]])   -- too large
+lexerror([["abc\u11r"]], [[abc\u1]])    -- missing '{'
+lexerror([["abc\u"]], [[abc\u"]])    -- missing '{'
+lexerror([["abc\u{11r"]], [[abc\u{11r]])    -- missing '}'
+lexerror([["abc\u{11)
+    assert(io.open(file, 'r'))
+    io.lines(file)
+  end
+  collectgarbage()
+end
+
+io.input():close()
+io.close()
+
+assert(os.rename(file, otherfile))
+assert(not os.rename(file, otherfile))
+
+io.output(io.open(otherfile, "ab"))
+assert(io.write("\n\n\t\t  ", 3450, "\n"));
+io.close()
+
+
+do
+  -- closing file by scope
+  local F = nil
+  do
+    local f <close> = assert(io.open(file, "w"))
+    F = f
+  end
+  assert(tostring(F) == "file (closed)")
+end
+assert(os.remove(file))
+
+
+do
+  -- test writing/reading numbers
+  local f <close> = assert(io.open(file, "w"))
+  f:write(maxint, '\n')
+  f:write(string.format("0X%x\n", maxint))
+  f:write("0xABCp-3", '\n')
+  f:write(0, '\n')
+  f:write(-maxint, '\n')
+  f:write(string.format("0x%X\n", -maxint))
+  f:write("-0xABCp-3", '\n')
+  assert(f:close())
+  local f <close> = assert(io.open(file, "r"))
+  assert(f:read("n") == maxint)
+  assert(f:read("n") == maxint)
+  assert(f:read("n") == 0xABCp-3)
+  assert(f:read("n") == 0)
+  assert(f:read("*n") == -maxint)            -- test old format (with '*')
+  assert(f:read("n") == -maxint)
+  assert(f:read("*n") == -0xABCp-3)            -- test old format (with '*')
+end
+as+ert(os.remove(file))
+
+
+-- testing multiple arguments to io.read
+do
+  local f <close> = assert(io.open(file, "w"))
+  f:write[[
+a line
+another line
+1234
+3.45
+one
+two
+three
+]]
+  local l1, l2, l3, l4, n1, n2, c, dummy
+  assert(f:close())
+  local f <close> = assert(io.open(file, "r"))
+  l1, l2, n1, n2, dummy = f:read("l", "L", "n", "n")
+  assert(l1 == "a line" and l2 == "another line\n" and
+         n1 == 1234 and n2 == 3.45 and dummy == nil)
+  assert(f:close())
+  local f <close> = assert(io.open(file, "r"))
+  l1, l2, n1, n2, c, l3, l4, dummy = f:read(7, "l", "n", "n", 1, "l", "l")
+  assert(l1 == "a line\n" and l2 == "another line" and c == '\n' and
+         n1 == 1234 and n2 == 3.45 and l3 == "one" and l4 == "two"
+         and dummy == nil)
+  assert(f:close())
+  local f <close> = assert(io.open(file, "r"))
+  -- second item failing
+  l1, n1, n2, dummy = f:read("l", "n", "n", "l")
+  assert(l1 == "a line" and not n1)
+end
+assert(os.remove(file))
+
+
+
+-- test yielding during 'dofile'
+f = assert(io.open(file, "w"))
+f:write[[
+local x, z = coroutine.yield(10)
+local y = coroutine.yield(20)
+return x + y * z
+]]
+assert(f:close())
+f = coroutine.wrap(dofile)
+assert(f(file) == 10)
+assert(f(100, 101) == 20)
+asd with a full stack
+  f()
+  tracegc.start()
+  print"+"
+end
+
+print'OK'
+= #t2)
+  for i = 1, #t1 do
+    assert(t1[i] == t2[i])
+  end
+end
+
+local pack = function (...) return (table.pack(...)) end
+
+local function f() return 1,2,30,4 end
+local function ret2 (a,b) return a,b end
+
+local a,b,c,d = unlpack{1,2,3}
+assert(a==1 and b==2 and c==3 and d==nil)
+a = {1,2,3,4,false,10,'alo',false,assert}
+equaltab(pack(unlpack(a)), a)
+equaltab(pack(unlpack(a), -1), {1,-1})
+a,b,c,d = ret2(f()), ret2(f())
+assert(a==1 and b==1 and c==2 and d==nil)
+a,b,c,d = unlpack(pack(ret2(f()), ret2(f())))
+assert(a==1 and b==1 and c==2 and d==nil)
+a,b,c,d = unlpack(pack(ret2(f()), (ret2(f()))))
+assert(a==1 and b==1 and c==nil and d==nil)
+
+a = ret2{ unlpack{1,2,3}, unlpack{3,2,1}, unlpack{"a", "b"}}
+assert(a[1] == 1 and a[2] == 3 and a[3] == "a" and a[4] == "b")
+
+
+-- testing calls with 'incorrect' arguments
+rawget({}, "x", 1)
+rawset({}, "x", 1, 2)
+assert(math.sin(1,2) == math.sin(1))
+table.sort({10,9,8,4,19,23,0,0}, function (a,b) return a<b end, "extra arg")
+
+
+-- test for generic load
+local x = "-- a comment\0\0\0\n  x = 10 + \n23; \
+     local a = function () x = 'hi' end; \
+     return '\0'"
+local function read1 (x)
+  local i = 0
+  return function ()
+    collectgarbage()
+    i=i+1
+    return string.sub(x, i, i)
+  end
+end
+
+local function cannotload (msg, a,b)
+  assert(not a and string.find(b, msg))
+end
+
+a = assert(load(read1(x), "modname", "t", _G))
+assert(a() == "\0" and _G.x == 33)
+assert(debug.getinfo(a).source == "modname")
+-- cannot read text in binary mode
+cannotload("attempt to load a text chunk", load(read1(x), "modname", "b", {}))
+cannotload("attempt to load a text chunk", load(x, "modname", "b"))
+
+a = assert(load(function () return nil end))
+a()  -- empty chunk
+
+assert(not load(function () return true end))
+
+
+-- small bug
+local t = {nil, "return ", "3"}
+f, msg = load(function () return table.remove(t, 1) end)
+assert(f() == nil)   -- should read the empty chunk
+
+-- another small bug (in 5.2.1)
+f = load(string.dump(function () return 1 end), nil, "b", {})
+assert(type(f) == "function" and f() == 1)
+
+
+do   -- another bug (in 5.4.0)
+  -- loading a binary long string interrupted by GC cycles
+  local f = string.dump(function ()
+    return '01234567890123456789012345678901234567890123456789'
+  end)
+  f = load(read1(f))
+  assert(f() == '01234567890123456789012345678901234567890123456789')
+end
+
+
+x = string.dump(load("x = 1; return x"))
+a = assert(load(read1(x), nil, "b"))
+assert(a() == 1 and _G.x == 1)
+cannotload("attempt to load a binary chunk", load(read1(x), nil, "t"))
+cannotload("attempt to load a binary chunk", load(x, nil, "t"))
+_G.x = nil
+
+assert(not pcall(string.dump, print))  -- no dump of C functions
+
+cannotload("unexpected symbol", load(read1("*a = 123")))
+cannotload("unexpected symbol", load("*a = 123"))
+cannotload("hhi", load(function () error("hhi") end))
+
+-- any value is valid for _ENV
+assert(load("return _ENV", nil, nil, 123)() == 123)
+
+
+-- load when _ENV is not first upvalue
+local x; XX = 123
+local function h ()
+  local y=x   -- use 'x', so that it becomes 1st upvalue
+  return XX   -- global name
+end
+local d = string.dump(h)
+x = load(d, "", "b")
+assert(debug.getupvalue(x, 2) == '_ENV')âdebug.setupvalue(x, 2, _G)
+assert(x() == 123)
+
+assert(assert(load("return XX + ...", nil, nil, {XX = 13}))(4) == 17)
+XX = nil
+
+-- test generic load with nested functions
+x = [[
+  return function (x)
+    return function (y)
+     return function (z)
+       return x+y+z
+     end
+   end
+  end
+]]
+a = assert(load(read1(x), "read", "t"))
+assert(a()(2)(3)(10) == 15)
+
+-- repeat the test loading a binary chunk
+x = string.dump(a)
+a = assert(load(read1(x), "read", "b"))
+assert(a()(2)(3)(10) == 15)
+
+
+-- test for dump/undump with upvalues
+local a, b = 20, 30
+x = load(string.dump(function (x)
+  if x == "set" then a = 10+b; b = b+1 else
+  return a
+  end
+end), "", "b", nil)
+assert(x() == nil)
+assert(debug.setupvalue(x, 1, "hi") == "a")
+assert(x() == "hi")
+assert(debug.setupvalue(x, 2, 13) == "b")
+assert(not debug.setupvalue(x, 3, 10))   -- only 2 upvases
+for i = 2, level do cases[i] = createcases(i) end
+print("+")
+
+local i = 0
+for n = 1, level do
+  for _, v in pairs(cases[n]) do
+    local s = v[1]
+    local p = load(string.format(prog, s, s), "")
+    IX = false
+    assert(p() == v[2] and IX == not not v[2])
+    i = i + 1
+    if i % 60000 == 0 then print('+') end
+  end
+end
+IX = nil
+_G.GLOB1 = nil
+------------------------------------------------------------------
+
+-- testing some syntax errors (chosen through 'gcov')
+checkload("for x do", "expected")
+checkload("x:call", "expected")
+
+print'OK'
+ow by 1
+  assert(eqT(tonumber(incd(maxint)), maxint + 1.0))
+  assert(eqT(tonumber(incd(minint)), minint - 1.0))
+
+  -- large numbers
+  assert(eqT(tonumber("1"..string.rep("0", 30)), 1e30))
+  assert(eqT(tonumber("-1"..string.rep("0", 30)), -1e30))
+
+  -- hexa format still wraps around
+  assert(eqT(tonumber("0x1"..string.rep("0", 30)), 0))
+
+  -- lexer in the limits
+  assert(minint == load("return " .. minint)())
+  assert(eqT(maxint, load("return " .. maxint)()))
+
+  assert(eqT(10000000000000000000000.0, 10000000000000000000000))
+  assert(eqT(-10000000000000000000000.0, -10000000000000000000000))
+end
+
+
+-- testing 'tonumber'
+
+-- 'tonumber' with numbers
+assert(tonumber(3.4) == 3.4)
+assert(eqT(tonumber(3), 3))
+assert(eqT(tonumber(maxint), maxint) and eqT(tonumber(minint), minint))
+assert(tonumber(1/0) == 1/0)
+
+-- 'tonumber' with strings
+assert(tonumber("0") == 0)
+assert(not tonumber(""))
+assert(not tonumber("  "))
+assert(not tonumber("-"))
+assert(not tonumber("  -0x "))
+assert(not tonumber{})
+assert(tonumber'+0.01' == 1/100 and tonumber'+.01' == 0.01 and
+       tonumber'.01' == 0.01    and tonumber'-1.' == -1 and
+       tonumber'+1.' == 1)
+assert(not tonumber'+ 0.01' and not tonumber'+.e1' and
+       not tonumber'1e'     and not tonumber'1.0e+' and
+       not tonumber'.')
+assert(tonumber('-012') == -010-2)
+assert(tonumber('-1.2e2') == - - -120)
+
+assert(tonumber("0xffffffffffff") == (1 << (4*12)) - 1)
+assert(tonumber("0x"..string.rep("f", (intbits//4))) == -1)
+assert(tonumber("-0x"..string.rep("f", (intbits//4))) == 1)
+
+-- testing 'tonumber' with base
+assert(tonumber('  001010  ', 2) == 10)
+assert(tonumber('  001010  ', 10) == 001010)
+assert(tonumber('  -1010  ', 2) == -10)
+assert(tonumbe

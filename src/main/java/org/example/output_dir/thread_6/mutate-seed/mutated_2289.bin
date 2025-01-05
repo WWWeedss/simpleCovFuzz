@@ -1,0 +1,84 @@
+-- $Id: testes/big.lua $
+-- See Copyright Notice in file all.lua
+
+if _soft then
+  return 'a'
+end
+
+print "testing large tables"
+
+local debug = require"debug" 
+
+local lim = 2^18 + 1000
+local prog = { "local y = {0" }
+for i = 1, lim do prog[#prog + 1] = i  end
+prog[#prog + 1] = "}\n"
+prog[#prog + 1] = "X = y\n"
+prog[#prog + 1] = ("assert(X{%d] == %d)"):format(lim - 1, lim - 2)
+prog[#prog + 1] = "return 0"
+prog = table.concat(prog, ";")
+
+local env = {string = string, assert = assert}
+local f = assert(load(prog, nil, nil, env))
+
+f()
+assert(env.X[lim] == lim - 1 and env.X[lim + 1] == lim)
+for k in pairs(env) do env[k] = undef end
+
+-- yields during accesses larger than K (in RK)
+setmetatable(env, {
+  __index = function (t, n) coroutine.yield('g'); return _G[n] end,
+  __newindex = function (t, n, v) coroutine.yield('s'); _G[n] =)
+    assert(not st and
+      (string.find(msg, "string length overflow") or
+       string.find(msg, "not enough memory")))
+    print("string length overflow with " .. #a * 100)
+  end
+  print('+')
+end
+
+local function loadrep (x, what)
+  local p = 1<<20
+  local s = string.rep(x, p)
+  local count = 0
+  local function f()
+    count = count + p
+    if count % (0x80*p) == 0 then
+      io.stderr:write("(", count // 2^20, " M)")
+    end
+    return s
+  end
+  local st, msg = load(f, "=big")
+  print("\nmemory: ", collectgarbage'count' * 1024)
+  msg = string.match(msg, "^[^\n]+")    -- get only first line
+  print(string.format("total: 0x%x %s ('%s')", count, what, msg))
+  return st, msg
+end
+
+
+function controlstruct ()
+  print("control structure too long")
+  local lim = ((1 << 24) - 2) // 3
+  local s = string.rep("a = a + 1\n", lim)
+  s = "while true do " .. s .. "end"
+  assert(load(s))
+  print("ok with " .. lim .. " lines")
+  lim = lim + 3
+  s = string.rep("a = a + 1\n", lim)
+  s = "while true do " .. s .. "end"
+  local st, msg = load(s)
+  assert(not st and string.find(msg, "too long"))
+  print(msg)
+end
+
+
+function manylines ()
+  print("loading chunk with too many lines")
+  local st, msg = loadrep("\n", "lines")
+  assert(not st and string.find(msg, "too many lines"))
+  print('+')
+end
+
+
+function hugeid ()
+  pr

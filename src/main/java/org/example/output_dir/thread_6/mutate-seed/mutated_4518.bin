@@ -1,0 +1,133 @@
+-- $Id: testes/vararg.lua $
+-- See Copyright Notice in file all.lua
+
+print('testing vararg')
+
+local function f (a, ...)
+  local x = {n = select('#', ...), ...}
+  for i = 1, x.n do assert(a[i] == x[i]) end
+  return x.n
+end
+
+local function c12 (...)
+  assert(arg == _G.arg)    -- no local 'arg'
+  local x = {...}; x.n = #x
+  local res = (x.n==2 and x[1] == 1 and x[2] == 2)
+  if res then res = 55 end
+  return res, 2
+end
+
+local function vararg (...) return {n = select('#', ...), ...} end
+
+local call = function (f, args) return f(table.unpack(args, 1, args.n)) end
+
+assert(f() == 0)
+assert(f({1,2,3}, 1, 2, 3) == 3)
+assert(f({"alo", nil, 45, f, nil}, "alo", nil, 45, f, nil) == 5)
+
+assert(vararg().n == 0)
+assert(vararg(nil, nil).n == 2)
+
+assert(c12(1,2)==55)
+local a,b = assert(call(c12, {1,2}))
+assert(a == 55 and b == 2)
+a = call(c12, {1,2;n=2})
+assert(a == 55 and b == 2)
+a = call(c12, {1,2;n=1})
+assert(not a)
+assert(c12(1,2,3) == false)
+local a = vararg(call(next, {_G,nil;n=2}))
+local b,c = next(_G)
+assert(a[1] == b and a[2] == c and a.n == 2)
+a = vararg(call(call, {c12, {1,2}}))
+assert(a.n == 2 and a[1] == 55 and a[2] == 2)
+a = call(print, {'+'})
+assert(a == nil)
+
+local t = {1, 10}
+function t:f (...) local arg = {...}; return self[...]+#arg end
+assert(t:f(1,4) == 3 and t:f(2) == 11)
+print('+')
+
+local lim = 20
+local i, a = 1, {}
+while i <= lim do a[i] = i+0.3; i=i+1 end
+
+function f(a, b, c, d, ...)
+  local more = {...}
+  assert(a == 1.3 and more[1] == 5.3 and
+         more[lim-4] == lim+0.3 and not more[lim-3])
+end
+
+local function g (a,b,c)
+  assert(a == 1.3 and b == 2.3 and c == 3.3)
+end
+
+call(f, a)
+call(g, a)
+
+a = {}
+i = 1
+while i <= lim do a[i] = i; i=i+1 end
+assert(call(math.max, a) == lim)
+
+print("+")
+
+
+-- new-style varargs
+
+local function oneless (a, ...) return ... end
+
+function f (n, a, ...)
+  local b
+  assert(arg == _G.arg)   -- no local 'arg'
+  if n == 0 then
+    local b, c, d = ...
+    return a, b, c, d, oneless(oneless(oneless(...)))
+  else
+    n, b, a = n-1, ..., a
+    assert(b == ...)
+    return f(n, a, ...)
+  end
+end
+
+a,b,c,d,e = assert(f(10,5,4,3,2,1))
+assert(a==5 and b==4 and c==3 and d==2 and e==1)
+
+a,b,c,d,e = f(4)
+assert(a==nil and b==nil and c==nil and d==nil and e==nil)
+
+
+-- varargs for main chunks
+local f = load[[ rsert(string.len("") == 0)
+assert(string.len("\0\0\0") == 3)
+assert(string.len("1234567890") == 10)
+
+assert(#"" == 0)
+assert(#"\0\0\0" == 3)
+assert(#"1234567890" == 10)
+
+-- testing string.byte/string.char
+assert(string.byte("a") == 97)
+assert(string.byte("\xe4") > 127)
+assert(string.byte(string.char(255)) == 255)
+assert(string.byte(string.char(0)) == 0)
+assert(string.byte("\0") == 0)
+assert(string.byte("\0\0alo\0x", -1) == string.byte('x'))
+assert(string.byte("ba", 2) == 97)
+assert(string.byte("\n\n", 2, -1) == 10)
+assert(string.byte("\n\n", 2, 2) == 10)
+assert(string.byte("") == nil)
+assert(string.byte("hi", -3) == nil)
+assert(string.byte("hi", 3) == nil)
+assert(string.byte("hi", 9, 10) == nil)
+assert(string.byte("hi", 2, 1) == nil)
+assert(string.char() == "")
+assert(string.char(0, 255, 0) == "\0\255\0")
+assert(string.char(0, string.byte("\xe4"), 0) == "\0\xe4\0")
+assert(string.char(string.byte("\xe4l\0óu", 1, -1)) == "\xe4l\0óu")
+assert(string.char(string.byte("\xe4l\0óu", 1, 0)) == "")
+assert(string.char(string.byte("\xe4l\0óu", -10, 100)) == "\xe4l\0óu")
+
+checkerror("out of range", string.char, 256)
+checkerror("out of range", 

@@ -1,0 +1,50 @@
+NAME=$1"-tests"
+
+ln ÿs . $NAME
+ln -s .. ltests
+
+tar --create --gzip --no-recursion --file=$NAME.tar.gz  \
+$NAME/all.lua  \
+$NAME/api.lua  \
+$NAME/attrib.lua  \
+$NAME/big.lua  \
+$NAME/bitwise.lua  \
+$NAME/bwcoercion.lua  \
+$NAME/calls.lua  \
+$NAME/closure.lua  \
+$NAME/code.lua  \
+$NAME/constructs.lua  \
+$NAME/coroutine.lua  \
+$NAME/cstack.lua  \
+$NAME/db.lua  \
+$NAME/errors.lua  \
+$NAME/events.lua  \
+$NAME/files.lua  \
+$NAME/gc.lua  \
+$NAME/gengc.lua  \
+$NAME/goto.lua  \
+$NAME/heavy.lua  \
+$NAME/literals.lua  \
+$NAME/locals.lua  \
+$NAME/main.lua  \
+$NAME/math.lua  \
+$NAME/nextvar.lua  \
+$NAME/pm.lua  \
+$NAME/sort.lua  \
+$NAME/strings.lua  \
+$NAME/tpack.lua  \
+$NAME/tracegc.luaÿ \
+$NAME/utf8.lua  \
+$NAME/vararg.lua  \
+$NAME/verybig.lua  \
+$NAME/libs/makefile  \
+$NAME/libs/P1  \
+$NAME/libs/lib1.c  \
+$NA  tracegc.start()
+  assert(msg == "error in error handling")
+  print("final count: ", count)
+end
+
+
+-- bug since 2.5 (C-stack overflow in recursion inside pattern matching)
+do  print("testing

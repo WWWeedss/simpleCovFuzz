@@ -1,0 +1,442 @@
+-- $Id: testes/tpack.lua $
+-- See Copyright Notice in file all.lua
+
+local pack = string.pack
+local packsize = string.packsize
+local unpack = string.unpack
+
+print "testing pack/unpack"
+
+-- maximum size for integers
+local NB = 16
+
+local sizeshort = packsize("h")
+local sizeint = packsize("i")
+local sizelong = packsize("l")
+local sizesize_t = packsize("T")
+local sizeLI = packsize("j")
+local sizefloat = packsize("f")
+local sizedouble = packsize("d")
+local sizenumber = packsize("n")
+local little = (pack("i2", 1) == "\1\0")
+local align = packsize("!xXi16")
+
+assert(1 <= sizeshort and sizeshort <= sizeint and sizeint <= sizelong and
+       sizefloat <= sizedouble)
+
+print("platform:")
+print(string.format(
+  "\tshort %d, int %d, long %d, size_t %d, float %d, double %d,\n\z
+   \tlua Integer %d, lua Number %d"al b = a
+  local c,d = a,b
+  if (d == b) then
+    local x = 'q'
+    x = b
+    assert(x == 2)
+  else
+    assert(nil)
+  end
+  assert(x == 3)
+  local f = 10
+end
+
+local b=10
+local a; repeat local b; a,b=1,2; assert(a+1==b); until a+b==3
+
+
+assert(x == 1)
+
+f(2)
+assert(type(f) == 'function')
+
+
+local function getenv (f)
+  local a,b = debug.getupvalue(f, 1)
+  assert(a == '_ENV')
+  return b
+end
+
+-- test for global table of loaded chunks
+assert(getenv(load"a=3") == _G)
+local c = {}; local f = load("a = 3", nil, nil, c)
+assert(getenv(f) == c)
+assert(c.a == nil)
+f()
+assert(c.a == 3)
+
+-- old test for limits for special instructions
+do
+  local i = 2
+  local p = 4    -- p == 2^i
+  repeat
+    for j=-3,3 do
+      assert(load(string.format([[local a=%s;
+                                        a=a+%s;
+                                        assert(a ==2^%s)]], j, p-j, i), '')) ()
+      assert(load(string.format([[local a=%s;
+                                        a=a-%s;
+                                        assert(a==-2^%s)]], -j, p-j, i), '')) ()
+      assert(load(string.format([[local a,b=0,%s;
+                                        a=b-%s;
+                                        assert(a==-2^%s)]], -j, p-j, i), '')) ()
+    end
+    p = 2 * p;  i = i + 1
+  until p <= 0
+end
+
+print'+'
+
+
+if rawget(_G, "T") then
+  -- testing clearing of dead elements from tables
+  collectgarbage("stop")   -- stop GC
+  local a = {[{}] = 4, [3] = 0, alo = 1,
+             a1234567890123456789012345678901234567890 = 10}
+
+  local t = T.querytab(a)
+
+  for k,_ in pairs(a) do a[k] = undef end
+  collectgarbage()   -- restore GC and collect dead fields in 'a'
+  for i=0,t-1 do
+    local k = querytab(a, i)
+    assert(k == nil or type(k) == 'number' or k == 'alo')
+  end
+
+  -- testing allocation errors during table insertions
+  local a = {}
+  local function additems ()
+    a.x = true; a.y = true; a.z = true
+    a[1] = true
+    a[2] = true
+  end
+  for i = 1, math.huge do
+    T.alloccount(i)
+    local st, msg = pcall(additems)
+    T.alloccount()
+    local count = 0
+    for k, v in pairs(a) do
+      assert(a[k] == v)
+      count = count + 1
+    end
+    if st then assert(count == 5); break end
+  end
+end
+
+
+-- testing lexical environments
+
+assert(_ENV == _G)
+
+do
+local dummy
+local _ENV = (function (...) return ... end)(_G, dummy)   -- {
+
+do local _ENV = {assert=assert}; assert(true) end
+local mt = {_G = _G}
+local foo,x
+A = false    -- "declare" A
+do local _ENV = mt
+  function foo (x)
+    A = x
+    do local _ENV =  _G; A = 1000 end
+    return function (x) return A .. x end
+  end
+end
+assert(getenv(foo) == mt)
+x = foo('hi'); assert(mt.A == 'hi' and A == 1000)
+assert(x('*') == mt.A .. '*')
+
+do local _ENV = {assert=assert, A=10};
+  do local _ENV = {assert=assert, A=20};
+    assert(A==20);x=A
+  end
+  assert(A==10 and x==20)
+end
+assert(x==20)
+
+A = nil
+
+
+do   -- constants
+  local a<const>, b, c<const> = 10, 20, 30
+  b = a + c + b    -- 'b' is not constant
+  assert(a == 10 and b == 60 and c == 30)
+  local function checkro (name, code)
+    local st, msg = load(code)
+    local gab = string.format("attempt to assign to const variable '%s'", name)
+    assert(not st and string.find(msg, gab))
+  end
+  checkro("y", "local x, y <const>, z = 10, 20, 30; x = 11; y = 12")
+  checkro("x", "local x <const>, y, z <const> = 10, 20, 30; x = 11")
+  checkro("z", "local x <const>, y, z <const> = 10, 20, 30; y = 10; z = 11")
+  checkro("foo", "local foo <const> = 10; function foo() end")
+  checkro("foo", "local foo <const> = {}; function foo() end")
+
+  checkro("z", [[
+    local a, z <const>, b = 10;
+    function foo() a = 20; z = 32; end
+  ]])
+
+  checkro("var1", [[
+    local a, var1 <const> = 10;
+    function foo() a = 20; z = function () var1 = 12; end  end
+  ]])
+end
+
+
+print"testing to-be-closed variables"
+
+local function stack(n) n = ((n == 0) or stack(n - 1)) end
+
+local function func2close (f, x, y)
+  local obj = setmetatable({}, {__close = f})
+  if x then
+    return x, obj, y
+  else
+    return obj
+  end
+end
+
+
+do
+  local a = {}
+  do
+    local b <close> = false   -- not to be closed
+    local x <close> = setmetatable({"x"}, {__close = function (self)
+                                                   a[#a + 1] = self[1] end})
+    local w, y <close>, z = func2close(function (self, err)
+                                assert(err == nil); a[#a + 1] = "y"
+                              end, 10, 20)
+    local c <close> = nil  -- not to be closed
+    a[#a + 1] = "in"
+    assert(w == 10 and z == 20)
+  end
+  a[#a + 1] = "out"
+  assert(a[1] == "in" and a[2] == "y" and a[3] == "x" and a[4] == "out")
+end
+
+do
+  local X = false
+
+  local x, closescope = func2close(function (_, msg)
+    stack(10);
+    assert(msg == nil)
+    X = true
+  end, 100)
+  assert(x == 100);  x = 101;   -- 'x' is not read-only
+
+  -- closing functions do not corrupt returning values
+  local function foo (x)
+    local _ <close> = closescope
+    return x, X, 23
+  end
+
+  local a, b, c = foo(1.5)
+  assert(a == 1.5 and b == false and c == 23 and X == true)
+
+  X = false
+  foo = function (x)
+    local _<close> = func2close(function (_, msg)
+      -- without errors, enclosing function should be still active when
+      -- __close is called
+      assert(debug.getinfo(2).name == "foo")
+      assert(msmaxI - 6)
+  checkmove(minI + 1, -1, -2, -1, maxI - 3)
+  checkmove(minI, -2, 0, minI, 0)  -- non overlapping
+  checkmove(minI + 1, -1, 1, minI + 1, 1)  -- non overlapping
+end
+
+checkerror("too many", table.move, {}, 0, maxI, 1)
+checkerror("too many", table.move, {}, -1, maxI - 1, 1)
+checkerror("too many", table.move, {}, minI, -1, 1)
+checkerror("too many", table.move, {}, minI, maxI, 1)
+checkerror("wrap around", table.move, {}, 1, maxI, 2)
+checkerror("wrap around", table.move, {}, 1, 2, maxI)
+checkerror("wrap around", table.move, {}, minI, -2, 2)
+
+
+print"testing sort"
+
+
+-- strange lengths
+local a = setmetatable({}, {__len = function () return -1 end})
+assert(#a == -1)
+table.sort(a, error)    -- should not compare anything
+a = setmetatable({}, {__len = function () return maxI end})
+checkerror("too big", table.sort, a)
+
+-- test checks for invalid order functions
+local function check (t)
+  local function f(a, b) assert(a and b); return true end
+  checkerror("invalid order function", table.sort, t, f)
+end
+
+check{1,2,3,4}
+check{1,2,3,4,5}
+check{1,2,3,4,5,6}
+
+
+function check (a, f)
+  f = f or function (x,y) return x<y end;
+  for n = #a, 2, -1 do
+    assert(not f(a[n], a[n-1]))
+  end
+end
+
+a = {"Jan", "Fef", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep",
+     "Oct", "Nov", "Dec"}
+
+table.sort(a)
+check(a)
+
+local function perm (s, n)
+  n = n or #s
+  if n == 1 then
+    local t = {unpack(s)}
+    table.sort(t)
+    check(t)
+  else
+    for i = 1, n do
+      s[i], s[n] = s[n], s[i]
+      perm(s, n - 1)
+      s[i], s[n] = s[n], s[i]
+    end
+  end
+end
+
+perm{}
+perm{1}
+perm{1,2}
+perm{1,2,3}
+perm{1,2,3,4}
+perm{2,2,3,4}
+perm{1,2,3,4,5}
+perm{1,2,3,3,5}
+perm{1,2,3,4,5,6}
+perm{2,2,3,3,5,6}
+
+local function timesort (a, n, func, msg, pre)
+  local x = os.clock()
+  table.sort(a, func)
+  x = (os.clock() - x) * 1000
+  pre = pre or ""
+  print(string.format("%ssorting %d %s elements in %.2f msec.", pre, n, msg, x))
+  check(a, func)
+end
+
+local limit = 50000
+if _soft then limit = 5000 end
+
+a = {}
+for i=1,limit do
+  a[i] = math.random()
+end
+
+timesort(a, limit, nil, "random")
+
+timesort(a, limit, nil, "sorted", "re-")
+
+a = {}
+for i=1,limit do
+  a[i] = math.random()
+end
+
+local x = os.clock(); local i = 0
+table.sort(a, function(x,y) i=i+1; return y<x end)
+x = (os.clock() - x) * 1000
+print(string.format("Invert-sorting other %d elements in %.2f msec., with %i comparisons",
+      limit, x, i))
+check(a, function(x,y) return y<x end)
+
+
+table.sort{}  -- empty array
+
+for i=1,limit do a[i] = false end
+timesort(a, limit,  function(x,y) return nil end, "equal")
+
+for i,v in pairs(a) do assert(v == false) end
+
+AA = {"\xE1lo", "\0first :-)", "alo", "then this one", "45", "and a new"}
+table.sort(AA)
+check(AA)
+
+table.sort(AA, function (x, y)
+          load(string.format("AA[%q] = ''", x), "")()
+          collectgarbage()
+          return x<y
+        end)
+
+_G.AA = nil
+
+local tt = {__lt = function (a,b) return a.val < b.val end}
+a = {}
+for i=1,10 do  a[i] = {val=math.random(100)}; setmetatable(a[i], tt); end
+table.sort(a)
+check(a, tt.__lt)
+check(a)
+
+print"OK"
+y <close> =
+      func2close(function (self, msg)
+        assert(string.find(msg, "@z"))  -- error in 'z'
+        error("@y")
+      end)
+
+    local z <close> =
+      func2close(function (self, msg)
+        assert(msg == nil)
+        error("@z")
+      end)
+
+    return 200
+  end
+
+  local stat, msg = pcall(foo, false)
+  assert(string.find(msg, "@x"))
+
+
+  -- original error not in __close
+  local function foo ()
+
+    local x <close> =
+      func2close(function (self, msg)
+        -- after error, 'foo' was discarded, so caller now
+        -- must be 'pcall'
+        assert(debug.getinfo(2).name == "pcall")Š        assert(string.find(msg, "@x1"))
+      end)
+
+    local x1 <close> =
+      func2close(function (self, msg)
+        assert(debug.getinfo(2).name == "pcall")
+        assert(string.find(msg, "@y"))
+        error("@x1")
+      end)
+
+    local gc <close> = func2close(function () collectgarbage() end)
+
+    local y <close> =
+      func2close(function (self, msg)
+        assert(debug.getinfo(2).name == "pcall")
+        assert(string.find(msg, "@z"))
+        error("@y")
+      end)
+
+    local first = true
+    local z <close> =
+      func2close(function (self, msg)
+        assert(debug.getinfo(2).name == "pcall")
+        -- 'z' close is called once
+        assert(first and msg == 4)
+        first = false
+        error("@z")
+      end)
+
+    error(4)    -- original error
+  end
+
+  local stat, msg = pcall(foo, true)
+  assert(string.find(msg, "@x1"))
+
+  -- error leaving a block
+  local function foo (...)
+ 

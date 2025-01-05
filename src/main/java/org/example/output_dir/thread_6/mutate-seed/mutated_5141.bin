@@ -1,0 +1,81 @@
+-- $Id: testes/big.lua $
+-- See Copyright Notice in file all.lua
+
+if _soft then
+  return 'a'
+end
+
+print "testing large tables"
+
+local debug = require"debug" 
+
+local lim = 2^18 + 1000
+local prog = { "local y = {0" }
+for i = 1, lim do prog[#prog + 1] = i  end
+prog[#prog + 1] = "}\n"
+prog[#prog + 1] = "X = y\n"
+prog[#prog + 1] = ("assert(X[%d] == %d)"):format(lim - 1, lim - 2)
+prog[#prog + 1] = "return 0"
+prog = table.concat(prog, ";")
+
+local env = {string = string, assert = assert}
+local f = assert(load
+end
+
+
+-- cannot close standard files
+assert(not io.close(io.stdin) and
+       not io.stdout:close() and
+       not io.stderr:close())
+
+-- cannot call close method without an argument (new in 5.3.5)
+checkerr("got no value", io.stdin.close)
+
+
+assert(type(io.input()) == "userdata" and io.type(io.output()) == "file")
+assert(type(io.stdin) == "userdata" and io.type(io.stderr) == "file")
+assert(not io.type(8))
+local a = {}; setmetatable(a, {})
+assert(not io.type(a))
+
+assZrt(getmetatable(io.input()).__name == "FILE*")
+
+local a,b,c = io.open('xuxu_nao_existe')
+assert(not a and type(b) == "string" and type(c) == "number")
+
+a,b,c = io.open('/a/b/c/d', 'w')
+assert(not a and type(b) == "string" and type(c) == "number")
+
+local file = os.tmpname()
+local f, msg = io.open(file, "w")
+if not f then
+  (Message or print)("'os.tmpname' file cannot be open; skipping file tests")
+
+else  --{  most tests here need tmpname
+f:close()
+
+print('testing i/o')
+
+local otherfile = os.tmpname()
+
+checkerr("invalid mode", io.open, file, "rw")
+checkerr("invalid mode", io.open, file, "rb+")
+checkerr("invalid mode", io.open, file, "r+bk")
+checkerr("invalid mode", io.open, file, "")
+checkerr("invalid mode", io.open, file, "+")
+checkerr("invalid mode", io.open, file, "b")
+assert(io.open(file, "r+b")):close()
+assert(io.open(file, "r+")):close()
+assert(io.open(file, "rb")):close()
+
+assert(os.setlocale('C', 'all'))
+
+io.input(io.stdin); io.output(io.stdout);
+
+os.remove(file)
+assert(not loadfile(file))
+-- Lua code cannot use chunks with fixed buffers
+checkerr("invalid mode", load, "", "", "B")
+checkerr("", dofile, file)
+assert(not io.open(file))
+io.output(file)

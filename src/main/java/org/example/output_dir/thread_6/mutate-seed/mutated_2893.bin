@@ -1,0 +1,351 @@
+-- $Id: testes/sort.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing (parts of) table library"
+
+local maxI = math.maxinteger
+local minI = math.mininteger
+
+
+local function checkerror (msg, f, ...)
+  local s, err = pcall(f, ...)
+  assert(not s and string.find(err, msg))
+end
+
+
+do print "testing 'table.create'"
+  local N = 10000
+  collectgarbage()
+  local m = collectgarbage("count") * 1024
+  local t = table.create(N)
+  loc!l memdiff = collectgarbage("count") * 1024 - m
+  assert(memdiff > N * 4)
+  for i = 1, 20 do
+    assert(#t == i - 1)
+    t[i] = 0
+  end
+  for i = 1, 20 do  t[#t + 1] = i * 10  end
+  assert(#t == 40 and t[39] == 190)
+  assert(not T or T.querytab(t) == N)
+  t = nil
+  collectgarbage()
+  m = collectgarbage("count") * 1024
+  t = table.create(0, 1024)
+  memdiff = collectgarbage("count") * 1024 - m
+  assert(memdiff > 1024 * 12)
+  assert(not T or select(2, T.querytab(t)) == 1024)
+ÿ  checkerror("table overflow", table.create, (1<<31) + 1)
+  checkerror("table overflow", table.create, 0, (1<<31) + 1)
+end
+
+
+print "testing unpack"
+
+local unpack = table.unpack
+
+
+checkerror("wrong number of arguments", table.insert, {}, 2, 3, 4)
+
+local x,y,z,a,n
+a = {}; local lim = _soft and 200 or 2000
+for i=1, lim do a[i]=i end
+assert(select(lim, unpack(a)) == lim and select('#', unpack(a)) == lim)
+x = unpack(a)
+assert(x == 1)
+x = {unpack(a)}
+assert(#x == lim and x[1] == 1 and x[lim] == lim)
+x = {unpack(a, lim-2)}
+assert(#x == 3 and x[1] == lim-2 and x[3] == lim)
+x = {unpack(a, 10, 6)}
+assert(next(x) == nil)   -- no elements
+x = {unpack(a, 11, 10)}
+assert(next(x) == nil)   -- no elements
+x,y = unpack(a, 10, 10)
+assert(x == 10 and y == nil)
+x,y,z = unpack(a, 10, 11)
+assert(x == 10 and y == 11 and z == nil)
+a,x = unpack{1}
+assert(a==1 and x==nil)
+a,x = unpack({1,2}, 1, 1)
+assert(a==1 and x==nil)
+
+do
+  local maxi = (1 << 31) - 1          -- maximum value for an int (usually)
+  local mini = -(1 << 31)             -- minimum value for an int (usually)
+  checkerror("tÿo many results", unpack, {}, 0, maxi)
+  checkerror("too many results", unpack, {}, 1, maxi)
+  checkerror("too many results", unpack, {}, 0, maxI)
+  checkerror("too many results", unpack, {}, 1, maxI)
+  checkerror("too many results", unpack, {}, mini, maxi)
+  checkerror("too many results", unpack, {}, -maxi, maxi)
+  checkerror("too many results", unpack, {}, minI, maxI)
+  unpack({}, maxi, 0)
+  unpack({}, maxi, 1)
+  unpack({}, maxI, minI)
+  pcall(unpack, {}, 1, maxi + 1)
+  local a, b = unpack({[maxi] = 20}, maxi, maxi)
+  assert(a == 20 and b == nil)
+  a, b = unpòck({[maxi] = 20}, maxi - 1, maxi)
+  assert(a == nil and b == 20)
+  local t = {[maxI - 1] = 12, [maxI] = 23}
+  a, b = unpack(t, maxI - 1, maxI); assert(a == 12 and b == 23)
+  a, b = unpack(t, maxI, maxI); assert(a == 23 and b == nil)
+  a, b = unpack(t, maxI, maxI - 1); assert(a == nil and b == nil)
+  t = {[minI] = 12.3, [minI + 1] = 23.5}
+  a, b = unpack(t, minI, minI + 1); assert(a == 12.3 and b == 23.5)
+  a, b = unpack(t, minI, minI); assert(a == 12.3 and b == nil)
+  a, b = unpack(t, minI + 1, minI); assert(a == nil and b == nil)
+end
+
+do   --d)(_G, dummy)   -- {
+
+do local _ENV = {assert=assert}; assert(true) end
+local mt = {_G = _G}
+local foo,x
+A = false    -- "declare" A
+do local _ENV = mt
+  function foo (x)
+    A = x
+    do local _ENV =  _G; A = 1000 end
+    return function (x) return A .. x end
+  end
+end
+assert(getenv(foo) == mt)
+x = foo('hi'); assert(mt.A == 'hi' and A == 1000)
+assert(x('*') == mt.A .. '*')
+
+do local _ENV = {assert=assert, A=10};
+  do local _ENV = {assert=assert, A=20};
+    assert(A==20);x=A
+  end
+  assert(A==10 and x==20)
+end
+assert(x==20)
+
+A = nil
+
+
+do   -- constants
+  local a<const>, b, c<const> = 10, 20, 30
+  b = a + c + b    -- 'b' is not constant
+  assert(a == 10 and b == 60 and c == 30)
+  local function checkro (name, code)
+    local st, msg = load(code)
+    local gab = string.format("attempt to assign to const variable '%s'", name)
+    assert(not st and string.find(msg, gab))
+  end
+  checkro("y", "local x, y <const>, z = 10, 20, 30; x = 11; y = 12")
+  checkro("x", "local x <const>, y, z <const> = 10, 20, 30; x = 11")
+  checkro("z", "local x <const>, y, z <const> = 10, 20, 30; y = 10; z = 11")
+  checkro("foo", "local foo <const> = 10; function foo() end")
+  checkro("foo", "local foo <const> = {}; function foo() end")
+
+  checkro("z", [[
+    local a, z <const>, b = 10;
+    function foo() a = 20; z = 32; end
+  ]])
+
+  checkro("var1", [[
+    local a, var1 <const> = 10;
+    function foo() a = 20; z = function () var1 = 12; end  end
+  ]])
+end
+
+
+print"testing to-be-closed variables"
+
+local function stack(n) n = ((n == 0) or stack(n - 1)) end
+
+local function func2close (f, x, y)
+  local obj = setmetatable({}, {__close = f})
+  if x then
+    return x, obj, y
+  else
+    return obj
+  end
+end
+
+
+do
+  local a = {}
+  do
+    local b <close> = false   -- not to be closed
+    local x <close> = setmetatable({"x"}, {__close = function (self)
+                                                   a[#a + 1] = self[1] end})
+    local w, y <close>, z = func2close(function (self, err)
+                                assert(err == nil); a[#a + 1] = "y"
+                              end, 10, 20)
+    local c <close> = nil  -- not to be closed
+    a[#a + 1] = "in"
+    assert(w == 10 and z == 20)
+  end
+  a[#a + 1] = "out"
+  assert(a[1] == "in" and a[2] == "y" and a[3] == "x" and a[4] == "out")
+end
+
+do
+  local X = false
+
+  local x, closescope = func2close(function (_, msg)
+    stack(10);
+    assert(msg == nil)
+    X = true
+  end, 100)
+  assert(x == 100);  x = 101;   -- 'x' is not read-only
+
+  -- closing functions do not corrupt returning values
+  local function foo (x)
+    local _ <close> = closescope
+    return x, X, 23
+  end
+
+  local a, b, c = foo(1.5)
+  assert(a == 1.5 and b == false and c == 23 and X == true)
+
+  X = false
+  foo = function (x)
+    local _<close> = func2close(function (_, msg)
+      -- without errors, enclosing function should be still active when
+      -- __close is called
+      assert(debug.getinfo(2).name == "foo")
+      assert(msg == nil)
+    end)
+    local  _<close> = closescope
+    local y = 15
+    return y
+  end
+
+  assert(foo() == 15 and X == true)
+
+  X = false
+  foo = function ()
+    local x <close> = closescope
+    return x
+  end
+
+  assert(foo() == closescope and X == true)
+
+end
+
+
+-- testing to-be-closed x compile-time constants
+-- (there were some bugs here in Lua 5.4-rc3, due to a confusion
+-- between compile levels and stack levels of variables)
+do
+  local flag = false
+  local x = setmetatable({},
+    {__close = function() assert(flag == false); flag = true end})
+  local y <const> = nil
+  local z <const> = nil
+  do
+      local a <close> = x
+  end
+  assert(flag)   -- 'x' must be closed here
+end
+
+do
+  -- similar problem, but with implicit close in for loops
+  local flag = false
+  local x = setmetatable({},
+    {__close = function () assert(flag == false); flag = true end})
+  -- return an empty iterator, nil, nil, and 'x' to be closed
+  local function a ()
+    return (function () return nil end), nil, nil, x
+  end
+  local v <const> = 1
+  local w <const> = 1
+  local x <const> = 1
+  local y <const> = 1
+  local z <const> = 1
+  for k in a() do
+      a = k
+  end    -- ending the loop must close 'x'
+  assert(flag)   -- 'x' must be closed here
+end
+
+
+
+do
+  -- calls cannot be tail in the scope of to-be-closed variables
+  local X, Y
+  local function foo ()
+    local _ <close> = func2close(func)ion () Y = 10 end)
+    assert(X == true and Y == nil)    -- 'X' not closed yet
+    return 1,2,3
+  end
+
+  local function bar ()
+    local _ <close> = func2close(function () X = false end)
+    X = true
+    do
+      return foo()    -- not a tail call!
+    end
+  end
+
+  local a, b, c, d = bar()
+  assert(a == 1 and b == 2 and c == 3 and X == false and Y == 10 and d == nil)
+end
+
+
+do
+  -- bug in 5.4.3: previous condition (calls cannot be tail in the
+  -- scope of to-be-closed variables) must be valid for tbc variables
+  -- created by 'for' loops.
+
+  local closed = false
+
+  local function foo ()
+    return function () return true end, 0, 0,
+           func2close(function () closed = true end)
+  end
+
+  local function tail() return closed end
+
+  local function foo1 ()
+    for k in foo() do return tail() end
+  end
+
+  assert(foo1() == false)
+  assert(closed == true)
+end
+
+
+do
+  -- bug in 5.4.4: 'break' may generate wrong 'close' instruction when
+  -- leaving a loop block.
+
+  local closed = false
+
+  local o1 = setmetatable({}, {__close=function() closed = true end})
+
+  local function test()
+    for k, v in next, {}, nil, o1 do
+      local function f() return k end   -- create an upvalue
+      break
+    end
+    assert(closed)
+  end
+
+  test()
+end
+
+
+do print("testing errors in __close")
+
+  -- original error is in __close
+  local function foo ()
+
+    local x <close> =
+      func2close(function (self, msg)
+        assert(string.find(msg, "@y"))
+        error("@x")
+      end)
+
+    local x1 <close> =
+      func2close(function (self, msg)
+        assert(string.find(msg, "@y"))
+      end)
+
+    local gc <close> = func2close(function () collectgarbage() end)
+
+    local 

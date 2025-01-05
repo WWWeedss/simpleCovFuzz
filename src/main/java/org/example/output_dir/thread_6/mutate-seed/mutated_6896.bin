@@ -1,0 +1,140 @@
+-- $Id: testes/verybig.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing RK"
+
+-- testing opcodes with RK arguments larger than K limit
+local function foo ()
+  local dummy = {
+     -- fill first 256 entries in table of constants
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+     17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+     33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+     49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
+     65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
+     81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
+     97, 98, 99, 100,= nil   -- declare f
+local function foo (a, ...)
+  local x, y = coroutine.running()
+  assert(x == f and y == false)
+  -- next call should not corrupt coroutine (but must fail,
+  -- as it attempts to resume the running coroutine)
+  assert(coroutine.resume(f) == false)
+  assert(coroutine.status(f) == "running")
+  local arg = {...}
+  assert(coroutine.isyieldable(x))
+  for i=1,#arg do
+    _G.x = {coroutine.yield(table.unpack(arg[i]))}
+  end
+  return table.unpack(a)
+end
+
+f = coroutine.create(foo)
+assert(coroutine.isyieldable(f))
+assert(type(f) == "thread" and coroutine.status(f) == "suspended")
+assert(string.find(tostring(f), "thread"))
+local s,a,b,c,d
+s,a,b,c,d = coroutine.resume(f, {1,2,3}, {}, {1}, {'a', 'b', 'c'})
+assert(coroutine.isyieldable(f))
+assert(s and a == nil and coroutine.status(f) == "suspended")
+s,a,b,c,d = coroutine.resÿme(f)
+eqtab(_G.x, {})
+assert(s and a == 1 and b == nil)
+assert(coroutine.isyieldable(f))
+s,a,b,c,d = coroutine.resume(f, 1, 2, 3)
+eqtab(_G.x, {1, 2, 3})
+assert(s and a == 'a' and b == 'b' and c == 'c' and d == nil)
+s,a,b,c,d = coroutine.resume(f, "xuxu")
+eqtab(_G.x, {"xuxu"})
+assert(s and a == 1 and b == 2 and c == 3 and d == nil)
+assert(coroutine.status(f) == "dead")
+s, a = coroutine.resume(f, "xuxu")
+assert(not s and string.find(a, "dead") and coroutine.status(f) == "dead")
+
+_G.f = nil
+
+-- yields in tail calls
+local function foo (i) return coroutine.yield(i) end
+local f = coroutine.wrap(function ()
+  for i=1,10 do
+    assert(foo(i) == _G.x)
+  end
+  return 'a'
+end)
+for i=1,10 do _G.x = i; assert(f(i) == i) end
+_G.x = 'xuxu'; assert(f('xuxu') == 'a')
+
+_G.x = nil
+
+-- recursive
+local function pf (n, i)
+  coroutine.yield(n)
+  pf(n*i, i+1)
+end
+
+f = coroutine.wrap(pf)
+local s=1
+for i=1,10 do
+  assert(f(1, 1) == s)
+  s = s*i
+end
+
+-- sieve
+local function gen (n)
+  return coroutine.wrap(function ()
+    for i=2,n do coroutine.yield(i) end
+  end)
+end
+
+
+local function filter (p, g)
+  return coroutine.wrap(function ()
+    while 1 do
+      local n = g()
+      if n == nil then return end
+      if math.fmod(n, p) ~= 0 then coroutine.yield(n) end
+    end
+  end)
+end
+
+local x = gen(80)
+local a = {}
+while 1 do
+  local n = x()
+  if n == nil then break end
+  table.insert(a, n)
+  x = filter(n, x)
+end
+
+assert(#a == 22 and a[#a] == 79)
+x, a = nil
+
+
+print("to-be-closed variables in coroutines")
+
+local function func2close (f)
+  return setmetatable({}, {__close = f})
+end
+
+do
+  -- ok to close a dead coroutine
+  local co = coroutine.create(print)
+  assert(coroutine.resume(co, "testing 'coroutine.close'"))
+  assert(coroutine.status(co) == "dead")
+  local st, msg = coroutine.close(co)
+  assert(st and msg == nil)
+  -- also ok to close it again
+  st, msg = coroutine.close(co)
+  assert(st and msg == nil)
+
+
+  -- cannot close the running coroutine
+  local st, msg = pcall(coroutine.close, coroutine.running())
+  assert(not st and string.find(msg, "running"))
+
+  local main = coroutine.running()
+
+  -- cannot close a "normal" coroutine
+  ;(coroutine.wrap(function ()
+    local st, msg = pcall(coroutine.close, main)
+   

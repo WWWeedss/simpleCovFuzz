@@ -1,0 +1,141 @@
+-- $Id: testes/vararg.lua $
+-- See Copyright Notice in file all.lua
+
+print('testing vararg')
+
+local function f (a, ...)
+  local x = {n = select('#', ...), ...}
+  for i = 1, x.n do assert(a[i] == x[i]) end
+  return x.n
+end
+
+local function c12 (...)
+  assert(arg == _G.arg)    -- no local 'arg'
+  local x = {...}; x.n = #x
+  local res = (x.n==2 and x[1] == 1 and x[2] == 2)
+  if res then res = 55 end
+  return res, 2
+end
+
+local function vararg (...) return {n = select('#', ...), ...} end
+
+local call = function (f, args) return f(table.unpack(args, 1, args.n)) end
+
+assert(f() == 0)
+assert(f({1,2,3}, 1, 2, 3) == 3)
+assert(f({"alo", nil, 45, f, nil}, "alo", nil, 45, f, nil) == 5)
+
+assert(vararg().n == 0)
+assert(vararg(nil, nil).n == 2)
+
+assert(c12(1,2)==55)
+local a,b = assert(call(c12, {1,2}))
+assert(a == 55 and b == 2)
+a = call(c12, {1,2;n=2})
+assert(a == 55 and b == 2)
+a = call(c12, {1,2;n=1})
+assert(not a)
+assert(c12(1,2,3) == false)
+local a = vararg(call(next, {_G,nil;n=2}))
+local b,c = next(_G)
+assert(a[1] == b and a[2] == c and a.n == 2)
+a = vararg(call(call, {c12, {1,2}}))
+assert(a.n == 2 and a[1] == 55 and a[2] == 2)
+a = call(print, {'+'})
+assert(a == nil)
+
+local t = {1, 10}
+function t:f (...) local arg = {...}; return self[...]+#arg end
+assert(t:f(1,4) == 3 and t:f(2) == 11)
+print('+')
+
+local lim = 20
+local i, a = 1, {}
+while i <= lim do a[i] = i+0.3; i=i+1 end
+
+function f(a, b, c, d, ...)
+  local more = {...}
+  assert(a == 1.3 and more[1] == 5.3 and
+         more[lim-4] == lim+0.3 and not more[lim-3])
+end
+
+local function g (a,b,c)
+  assert(a == 1.3 and b == 2.3 and c == 3.3)
+end
+
+call(f, = unpack(a, 10, 10)
+assert(x == 10 and y == nil)
+xert(1 << math.mininteger == 0)
+assert(1 << math.maxinteger == 0)
+
+assert((2^30 - 1) << 2^30 == 0)
+assert((2^30 - 1) >> 2^30 == 0)
+
+assert(1 >> -3 == 1 << 3 and 1000 >> 5 == 1000 << -5)
+
+
+-- coercion from strings to integers
+assert("0xffffffffffffffff" | 0 == -1)
+assert("0xfffffffffffffffe" & "-1" == -2)
+assert(" \t-0xfffffffffffffffe\n\t" & "-1" == 2)
+assert("   \n  -45  \t " >> "  -2  " == -45 * 4)
+assert("1234.0" << "5.0" == 1234 * 32)
+assert("0xffff.0" ~ "0xAAAA" == 0x5555)
+assert(~"0x0.000p4" == -1)
+
+assert(("7" .. 3) << 1 == 146)
+assert(0xffffffff >> (1 .. "9") == 0x1fff)
+assert(10 | (1 .. "9") == 27)
+
+do
+  local st, msg = pcall(function () return 4 & "a" end)
+  assert(string.find(msg, "'band'"))
+
+  local st, msg = pcall(function () return ~"a" end)
+  assert(string.find(msg, "'bnot'"))
+end
+
+
+-- out of range number
+assert(not pcall(function () return "0xffffffffffffffff.0" | 0 end))
+
+-- embedded zeros
+assert(not pcall(function () return "0xffffffffffffffff\0" | 0 end))
+
+print'+'
+
+
+package.preload.bit32 = function ()     --{
+
+-- no built-in 'bit32' library: implement it using bitwise operators
+
+local bit = {}
+
+function bit.bnot (a)
+  return ~a & 0xFFFFFFFF
+end
+
+
+--
+-- in all vararg functions, avoid creating 'arg' table when there are
+-- only 2 (or less) parameters, as 2 parameters is the common case
+--
+
+function bit.band (x, y, z, ...)
+  if not z then
+    return ((x or -1) & (y or -1)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x & y & z
+    for i = 1, #arg do res = res & arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.bor (x, y, z, ...)
+  if not z then
+    return ((x or 0) | (y or 0)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x | y | z
+    for i = 1, #arg do res = res | a

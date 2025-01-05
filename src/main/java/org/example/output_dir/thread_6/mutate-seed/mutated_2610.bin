@@ -1,0 +1,271 @@
+-- $Id: testes/sort.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing (parts of) table library"
+
+local maxI = math.maxinteger
+local minI = math.mininteger
+
+
+local function checkerror (msg, f, ...)
+  local s, err = pcall(f, ...)
+  assert(not s and string.find(err, msg))
+end
+
+
+do print "testing 'table.create'"
+  local N = 10000
+  collectgarbage()
+  local m = collectgarbage("count") * 1024
+  local t = table.create(N)
+  local memdiff = collectgarbage("count") * 1024 - m
+  assert(memdiff > N * 4)
+  for i = 1, 20 do
+    assert(#t == i - 1)
+    t[i] = 0
+  end
+  for i = 1, 20 do  t[#t + 1] = i * 10  end
+  assert(#t == 40 and t[39] == 190)
+  assert(not T or T.querytab(t) == N)
+  t = nil
+  collectgarbage()
+  m = collectgarbage("count") * 1024
+  t = table.create(0, 1024)
+  memdiff = collectgarbage("count") * 1024 - m
+  assert(memdiff > 1024 * 12)
+  assert(not T or select(2, T.querytab(t)) == 1024)
+
+  checkerror("table overflow", table.create, (1<<31) + 1)
+  checkerror("table overflow", table.create, 0, (1<<31) + 1)
+end
+
+
+print "testing unpack"
+
+local unpack = table.unpack
+
+
+checkerror("wrong number of arguments", table.insert, {}, 2, 3, 4)
+
+local x,y,z,a,n
+a = {}; local lim = _soft and 200 or 2000
+for i=1, lim do a[i]=i end
+assert(select(lim, unpack(a)) == lim and select('#', unpack(a)) == lim)
+x = unpack(a)
+assert(x == 1)
+x = {unpack(a)}
+assert(#x == lim and x[1] == 1 and x[lim] == lim)
+x = {unpack(a, lim-2)}
+assert(#x == 3 and x[1] == lim-2 and x[3] == lim)
+x = {unpack(a, 10, 6)}
+assert(next(x) == nil)   -- no elements
+x = {unpack(a, 11, 10)}
+assert(next(x) == nil)   -- no elements
+x,y = unpack(a, 10, 10)
+assert(x == 10 and y == nil)
+x,y,z = unpack(a, 10, 11)
+assert(x == 10 and y == 11 and z == nil)
+a,x = unpack{1}
+assert(a==1 and x==nil)
+a,x = unpack({1,2}, 1, 1)
+assert(a==1 and x==nil)
+
+do
+  local maxi = (1 << 31) - 1          -- maximum value for an int (usually)
+  local mini =t(string.find(err, "line " .. line))
+    assert(string.find(err, msg, 1, true))
+  end
+
+  checksyntax([[
+    ::A:: a = 1
+    ::A::
+  ]], "label 'A' already defined", 1)
+
+  checksyntax([[
+    a = 1
+    goto A
+    do ::A:: end
+  ]], "no visible label 'A'", 2)
+
+end
+
+
+if not T then
+  (Message or print)
+    ('\n >>> testC not active: skipping tests for messages in C <<<\n')
+else
+  print "testing memory error message"
+  local a = {}
+  for i = 1, 10000 do a[i] = true end   -- preallocate array
+  collectgarbage()
+  T.totalmem(T.totalmem() + 10000)
+  -- force a memory error (by a small margin)
+  local st, msg = pcall(function()
+    for i = 1, 100000 do a[i] = tostring(i) end
+  end)
+  T.totalmem(0)
+  assert(not st and msg == "not enough" .. " memory")
+
+  -- stack space for luaL_traceback (bug in 5.4.6)
+  local res = T.testC[[
+    # push 16 elements on the stack
+    pushnum 1; pushnum 1; pushnum 1; pushnum 1; pushnum 1;
+    pushnum 1; pushnum 1; pushnum 1; pushnum 1; pushnum 1;
+    pushnum 1; pushnum 1; pushnum 1; pushnum 1; pushnum 1;
+    pushnum 1;
+    # traceback should work with 4 remaining slots
+    traceback xuxu 1;
+    return 1
+  ]]
+  assert(string.find(res, "xuxu.-main chunk"))
+end
+
+
+-- tests for better error messages
+
+checkmessage("a = {} + 1", "arithmetic")
+checkmessage("a = {} | 1", "bitwise operation")
+checkmessage("a = {} < 1", "attempt to compare")
+checkmessage("a = {} <= 1", "attempt to compare")
+
+checkmessage("aaa=1; bbbb=2; aaa=math.sin(3)+bbbb(3)", "global 'bbbb'")
+checkmessage("aaa={}; do local aaa=1 end aaa:bbbb(3)", "method 'bbbb'")
+checkmessage("local a={}; a.bbbb(3)", "field 'bbbb'")
+assert(not string.find(doit"aaa={13}; local bbbb=1; aaa[bbbb](3)", "'bbbb'"))
+checkmessage("aaa={13}; local bbbb=1; aaa[bbbb](3)", "number")
+checkmessage("aaa=(1)..{}", "a table value")
+
+-- bug in 5.4.6
+checkmessage("a = {_ENV = {}}; print(a._ENV.x + 1)", "field 'x'")
+
+_G.aaa, _G.bbbb = nil
+
+-- calls
+checkmessage("local a; a(13)", "local 'a'")
+checkmessage([[
+  local a = setmetatable({}, {__add = 34})
+  a = a + 1
+]], "metamethod 'add'")
+checkmessage([[
+  local a = setmetatable({}, {__lt = {}})
+  a = a > a
+]], "metamethod 'lt'")
+
+-- tail calls
+checkmessage("local a={}; return a.bbbb(3)", "field 'bbbb'")
+checkmessage("aaa={}; do local aaa=1 end; return aaa:bbbb(3)", "method 'bbbb'")
+
+checkmessage("aaa = #print", "length of a function value")
+checkmessage("aaa = #3", "length of a number value")
+
+_G.aaa = nil
+
+checkmessage("aaa.bbb:ddd(9)", "global 'aaa'")
+checkmessage("local aaa={bbb=1}; aaa.bbb:ddd(9)", "field 'bbb'")
+checkmessage("local aaa={bbb={}}; aaa.bbb:ddd(9)", "method 'ddd'")
+checkmessage("local a,b,c; (function () a = b+1.1 end)()", "upvalue 'b'")
+assert(not doit"local aaa={bbb={ddd=next}}; aaa.bbb:ddd(nil)")
+
+-- upvalues being indexed do not go to the stack
+checkmessage("local a,b,cc; (function () a = cc[1] end)()", "upvalue 'cc'")
+checkmessage("local a,b,cc; (function () a.x = 1 end)()", "upvalue 'a'")
+
+checkmessage("local _ENV = {x={}}; a = a + 1", "global 'a'")
+
+checkmessage("BB=1; local aaa={}; x=aaa+BB", "local 'aaa'")
+checkmessage("aaa={}; x=3.3/aaa", "global 'aaa'")
+checkmessage("aaa=2; BB=nil;x=aaa*BB", "global 'BB'")
+checkmessage("aaa={}; x=-aaa", "global 'aaa'")
+
+-- short circuit
+checkmessage("aaa=1; local aaa,bbbb=2,3; aaa = math.sin(1) and bbbb(3)",
+       "local 'bbbb'")
+checkmessage("aaa=1; local aaa,bbbb=2,3; aaa = bbbb(1) or aaa(3)",
+             "local 'bbbb'")
+checkmessage("local a,b,c,f = 1,1,1; f((a and b) or c)", "local 'f'")
+checkmessage("local a,b,c = 1,1,1; ((a and b) or c)()", "call a number value")
+assert(not string.find(doit"aaa={}; x=(aaa or aaa)+(aaa and aaa)", "'aaa'"))
+assert(not string.find(doit"aaa={}; (aaa or aaa)()", "'aaa'"))
+
+checkmessage("print(print < 10)", "function with number")
+checkmessage("print(print < print)", "two function values")
+checkmessage("print('10' < 10)", "string with number")
+checkmessage("print(10 < '23')", "number with string")
+
+-- float->integer conversions
+checkmessage("local a = 2.0^100; x = a << 2", "local a")
+checkmessage("local a = 1 >> 2.0^100", "has no integer representation")
+checkmessage("local a = 10.1 << 2.0^100", "has no integer representation")
+checkmessage("local a = 2.0^100 & 1", "has no integer representation")
+checkmessage("local a = 2.0^100 & 1e100", "has no integer representation")
+checkmessage("local a = 2.0 | 1e40", "has no integer representation")
+checkmessage("local a = 2e100 ~ 1", "has no integer representation")
+checkmessage("string.sub('a', 2.0^100)", "has no integer representation")
+checkmessage("string.rep('a', 3.3)", "has no integer representation")
+checkmessage("return 6e40 & 7", "has no integer representation")
+checkmessage("return 34 << 7e30", "has no integer representation")
+checkmessage("return ~-3e40", "has no integer representation")
+checkmessage("return ~-3.009", "has no integer representation")
+checkmessage("return 3.009 & 1", "has no integer representation")
+checkmessage("return 34 >> {}", "table value")
+checkmessage("aaa = 24 // 0", "divide by zero")
+checkmessage("aaa = 1 % 0", "'n%0'")
+
+
+-- type error for an object which is neither in an upvalue nor a register.
+-- The following code will try to index the value 10 that is stored in
+-- the metatable, without moving it to a register.
+checkmessage("local a = setmetatable({}, {__index = 10}).x",
+             "attempt to index a number value")
+
+
+-- numeric for loops
+checkmessage("for i = {}, 10 do end", "table")
+checkmessage("for i = io.stdin, 10 do end", "FILE")
+checkmessage("for i = {}, 10 do end", "initial value")
+checkmessage("for i = 1, 'x', 10 do end", "string")
+checkmessage("for i = 1, {}, 10 do end", "limit")
+checkmessage("for i = 1, {} do end", "limit")
+checkmessage("for i = 1, 10, print do end", "step")
+checkmessage("for i = 1, 10, print do end", "function")
+
+-- passing light userdata instead of full userdata
+_G.D = debug
+checkmessage([[
+  -- create light udata
+  local x = D.upvalueid(function () return debug end, 1)
+  D.setuservalue(x, {})
+]], "light userdata")
+_G.D = nil
+
+do   -- named objects (field '__name')
+  checkmessage("math.sin(io.input())", "(number expected, got FILE*)")
+  _G.XX = setmetatable({}, {__name = "My Type"})
+  assert(string.find(tostring(XX), "^My Type"))
+  checkmessage("io.input(XX)", "(FILE* expected, got My Type)")
+  checkmessage("return XX + 1", "on a My Type value")
+  checkmessage("return ~io.stdin", "on a FILE* value")
+  checkmessage("return XX < XX", "two My Type values")
+  checkmessage("return {} < XX", "table with My Type")
+  checkmessage("return XX < io.stdinÆ, "My Type with FILE*")
+  _G.XX = nil
+
+  if T then   -- extra tests for 'luaL_tolstring'
+    -- bug in 5.4.3; 'luaL_tolstring' with negative indices
+    local x = setmetatable({}, {__name="TABLE"})
+    assert(T.testC("Ltolstring -1; return 1", x) == tostring(x))
+
+    local a, b = T.testC("pushint 10; Ltolstring -2; return 2", x)
+    assert(a == 10 and b == tostring(x))
+
+    setmetatable(x, {__tostring=function (o)
+      assert(o == x)
+      return "ABC"
+    end})
+    local a, b, c = T.testC("pushint 10; Ltolstring -2; return 3", x)
+    assert(a == x and b == 10 and c == "ABC")
+  end
+end
+
+-- global functions
+checkmessage("(io.write or prin

@@ -1,0 +1,418 @@
+-- $Id: testes/constructs.lua $
+-- See Copyright Notice in file all.lua
+
+;;print "testing syntax";;
+
+local debug = require "debug"
+
+
+local function checkload (s, msg)
+  assert(string.find(select(2, load(s)), msg))
+end
+
+-- testing semicollons
+local a
+do ;;; 5, 6, 7, 8, 9, 10, 11, 12, 13,ables to avoid constant folding
+local a, b, c, d
+a = 0xFFFFFFFFFFFFFFFF
+assert(a == -1 and a & -1 == a and a & 35 == 35)
+a = 0xF0F0F0F0F0F0F0F0
+assert(a | -1 == -1)
+asserô(a ~ a == 0 and a ~ 0 == a and a ~ ~a == -1)
+assert(a >> 4 == ~a)
+a = 0xF0; b = 0xCC; c = 0xAA; d = 0xFD
+assert(a | b ~ c & d == 0xF4)
+
+a = 0xF0.0; b = 0xCC.0; c = "0xAA.0"; d = "0xFD.0"
+assert(a | b ~ c & d == 0xF4)
+
+a = 0xF0000000; b = 0xCC000000;
+c = 0xAA000000; d = 0xFD000000
+assert(a | b ~ c & d == 0xF4000000)
+assert(~~a == a and ~a == -1 ~ a and -d == ~d + 1)
+
+a = a << 32
+b = b << 32
+c = c << 32
+d= d << 32
+assert(a | b ~ c & d == 0xF4000000 << 32)
+assert(~~a == a and ~a == -1 ~ a and -d == ~d + 1)
+
+
+do   -- constant folding
+  local code = string.format("return -1 >> %d", math.maxinteger)
+  assert(load(code)() == 0)
+  local code = string.format("return -1 >> %d", math.mininteger)
+  assert(load(code)() == 0)
+  local code = string.format("return -1 << %d", math.maxinteger)
+  assert(load(code)() == 0)
+  local code = string.format("return -1 << %d", math.mininteger)
+  assert(load(code)() == 0)
+end
+
+assert(-1 >> 1 == (1 << (numbits - 1)) - 1 and 1 << 31 == 0x80000000)
+assert(-1 >> (numbiãs - 1) == 1)
+assert(-1 >> numbits == 0 and
+       -1 >> -numbits == 0 and
+       -1 << numbits == 0 and
+       -1 << -numbits == 0)
+
+assert(1 >> math.mininteger == 0)
+assert(1 >> math.maxinteger == 0)
+assert(1 << math.mininteger == 0)
+assert(1 << math.maxinteger == 0)
+
+assert((2^30 - 1) << 2^30 == 0)
+assert((2^30 - 1) >> 2^30 == 0)
+
+assert(1 >> -3 == 1 << 3 and 1000 >> 5 == 1000 << -5)
+
+
+-- coercion from strings to integers
+assert("0xffffffffffffffff" | 0 == -1)
+assert("0xfffffffffffffffe" & "-1" == -2)
+assert(" \t-0xfffffffffffffffe\n\t" & "-1" == 2)
+assert("   \n  -45  \t " >> "  -2  " == -45 * 4)
+asÿert("1234.0" << "5.0" == 1234 * 32)
+assert("0xffff.0" ~ "0xAAAA" == 0x5555)
+assert(~"0x0.000p4" == -1)
+
+assert(("7" .. 3) << 1 == 146)
+assert(0xffffffff >> (1 .. "9") == 0x1fff)
+assert(10 | (1 .. "9") == 27)
+
+do
+  local st, msg = pcall(function () return 4 & "a" end)
+  assert(string.find(msg, "'band'"))
+
+  local st, msg = pcall(function () return ~"a" end)
+  assert(string.find(msg, "'bnot'"))
+end
+
+
+-- out of range number
+assert(not pcall(function () return "0xffffffffffffffff.0" | 0 end))
+
+-- embedded zeros
+assert(not pcall(function () return "0xffffffffffffffff\0" | 0 end))
+
+print'+'
+
+
+package.preload.bit32 = function ()     --{
+
+-- no built-in 'bit32' library: implement it using bitwise operators
+
+local bit = {}
+
+function bit.bnot (a)
+  return ~a & 0xFFFFFFFF
+end
+
+
+--
+-- in all vararg functions, avoid creating 'arg' table when there are
+-- only 2 (or less) parameters, as 2 parameters is the common case
+--
+
+function bit.band (x, y, z, ...)
+  if not z then
+    return ((x or -1) & (y or -1)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x & y & z
+    for i = 1, #arg do res = res & arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.bor (x, y, z, ...)
+  if not z then
+    return ((x or 0) | (y or 0)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x | y | z
+    for i = 1, #arg do res = res | arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.bxor (x, y, z, ...)
+  if not z then
+    return ((x or 0) ~ (y or 0)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x ~ y ~ z
+    for i = 1, #arg do res = res ~ arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.btest (...)
+ ssert(x[nil] == nil)
+x = {f'alo', f'xixi', nil};
+assert(x[1] == 'alo' and x[2] == 'xixi' and x[3] == nil);
+x = {f'alo'..'xixi'};
+assert(x[1] == 'aloxixi')
+x = {f{}}
+assert(x[2] == 'jojo' and type(x[1]) == 'table')
+
+
+local f = function (i)
+  if i < 10 then return 'a';
+  elseif i < 20 then return 'b';
+  elseif i < 30 then return 'c';
+  end;
+end
+
+assert(f(3) == 'a' and f(12) == 'b' and f(26) == 'c' and f(100) == nil)
+
+for i=1,1000 do break; end;
+local n=100;
+local i=3;
+local t = {};
+local a=nil
+while not a do
+  a=0; for i=1,n do for i=i,1,-1 do a=a+1; t[i]=1; end; end;
+end
+assert(a == n*(n+1)/2 and i==3);
+assert(t[1] and t[n] and not t[0] and not t[n+1])
+
+function f(b)
+  local x = 1;
+  repeat
+    local a;
+    if b==1 then local b=1; x=10; break
+    elseif b==2 then x=20; break;
+    elseif b==3 then x=30;
+    else local a,b,c,d=math.sin(1); x=x+1;
+    end
+  until x>=12;
+  return x;
+end;
+
+assert(f(1) == 10 and f(2) == 20 and f(3) == 30 and f(4)==12)
+
+
+local f = function (i)
+  if i < 10 then return 'a'
+  elseif i < 20 then return 'b'
+  elseif i < 30 then return 'c'
+  else return 8
+  end
+end
+
+assert(f(3) == 'a' and f(12) == 'b' and f(26) == 'c' and f(100) == 8)
+
+local a, b = nil, 23
+x = {f(100)*2+3 or a, a or b+2}
+assert(x[1] == 19 and x[2] == 25)
+x = {f=2+3 or a, a = b+2}
+assert(x.f == 5 and x.a == 25)
+
+a={y=1}
+x = {a.y}
+assert(x[1] == 1)
+
+local function f (i)
+  while 1 do
+    if i>0 then i=i-1;
+    else return; end;
+  end;
+end;
+
+local function g(i)
+  while 1 do
+    if i>0 then i=i-1
+    else return end
+  end
+end
+
+f(10); g(10);
+
+do
+  function f () return 1,2,3; end
+  local a, b, c = f();
+  assert(a==1 and b==2 and c==3)
+  a, b, c = (f());
+  assert(a==1 and b==nil and c==nil)
+end
+
+local a,b = 3 and f();
+assert(a==1 and b==nil)
+
+function g() f(); return; end;
+assert(g() == nil)
+function g() return nil or f() end
+a,b = g()
+assert(a==1 and b==nil)
+
+print'+';
+
+do   -- testing constants
+  local prog <const> = [[local x <XXX> = 10]]
+  checkload(prog, "unknown attribute 'XXX'")
+
+  checkload([[local xxx <const> = 20; xxx = 10]],
+             ":1: attempt to assign to const variable 'xxx'")
+
+  checkload([[
+    local xx;
+    local xxx <const> = 20;
+    local yyy;
+    local function foo ()
+      local abc = xx + yyy + xxx;
+      return function () return function () xxx = yyy end end
+    end
+  ]], ":6: attempt to assign to const variable 'xxx'")
+
+  checkload([[
+    local x <close> = nil
+    x = io.open()
+  ]], ":2: attempt to assign to const variable 'x'")
+end
+
+f = [[
+return function ( a , b , c , d , e )
+  local x = a >= b or c or ( d and e ) or nil
+  return x
+end , { a = 1 , b = 2 >= 1 , } or { 1 };
+]]
+f = string.gsub(f, "%s+", "\n");   -- force a SETLINE between opcodes
+f,a = load(f)();
+assert(a.a == 1 and a.b)
+
+function g (a,b,c,d,e)
+  if not (a>=b or c or d and e or nil) then return 0; else return 1; end;
+end
+
+local function h (a,b,c,d,e)
+  while (a>=b or c or (d and e) or nil) do return 1; end;
+  return 0;
+end;
+
+assert(f(2,1) == true and g(2,1) == 1 and h(2,1) == 1)
+assert(f(1,2,'a') == 'a' and g(1,2,'a') == 1 and h(1,2,'a') == 1)
+assert(f(1,2,'a')
+~=          -- force SETLINE before nil
+nil, "")
+assert(f(1,2,'a') == 'a' and g(1,2,'a') == 1 and h(1,2,'a') == 1)
+assert(f(1,2,nil,1,'x') == 'x' and g(1,2,nil,1,'x') == 1 and
+                                   h(1,2,nil,1,'x') == 1)
+assert(f(1,2,nil,nil,'x') == nil and g(1,2,nil,nil,'x') == 0 and
+                                     h(1,2,nil,nil,'x') == 0)
+assert(f(1,2,nil,1,nil) == nil and g(1,2,nil,1,nil) == 0 and
+                                   h(1,2,nil,1,nil) == 0)
+
+assert(1 and 2<3 == true and 2<3 and 'a'<'b' == true)
+x = 2<3 and not 3; assert(x==false)
+x = 2<1 or (2>1 and 'a'); assert(x=='a')
+
+
+do
+  local a; if nil then a=1; else a=2; end;    -- this nil comes as PUSHNIL 2
+  assert(a==2)
+end
+
+local function F (a)
+  assert(debug.getinfo(1, "n").name == 'F')
+  return a,2,3
+end
+
+a,b = F(1)~=nil; assert(a == true and b == nil);
+a,b = F(nil)==nil; assert(a == true and b == nil)
+
+----------------------------------------------------------------
+------------------------------------------------------------------
+
+-- sometimes will be 0, sometimes will not...
+_ENV.GLOB1 = math.random(0, 1)
+
+-- basic expressions with their respective values
+local basiccases = {
+  {"nil", nil},
+  {"false", false},
+  {"true", true},
+  {"10", 10},
+  {"(0==_ENV.GLOB1)", 0 == _ENV.GLOB1},
+}
+
+local prog
+
+if _ENV.GLOB1 == 0 then
+  basiccases[2][1] = "F"   -- constant false
+
+  prog = [[
+    local F <const> = false
+    if %s then IX = true end
+    return %s
+]]
+else
+  basiccases[4][1] = "k10"   -- constant 10
+
+  prog = [[
+    local k10 <const> = 10
+    if %s then IX = true end
+    return %s
+  ]]
+end
+
+print('testing short-circuit optimizations (' .. _ENV.GLOB1 .. ')')
+
+
+-- operators with their respective values
+local binops <const> = {
+  {" and ", function (a,b) if not a then return a else return b end end},
+  {" or ", function (a,b) if a then return a else return b end end},
+}
+
+local cases <const> = {}
+
+-- creates all combinations of '(cases[i] op cases[n-i])' plus
+-- 'not(cases[i] op cases[n-i])' (syntax + value)
+local function createcases (n)
+  local res = {}
+  for i = 1, n - 1 do
+    for _, v1 in ipairs(cases[i]) do
+      for _, v2 in ipairs(cases[n - i]) do
+        for _, op in ipairs(binops) do
+            local t = {
+              "(" .. v1[1] .. op[1] .. v2[1] .. ")",
+              op[2](v1[2], v2[2])
+            }
+            res[#res + 1] = t
+            res[#res + 1] = {"not" .. t[1], not t[2]}
+        end
+      end
+    end
+  end
+  return res
+end
+
+-- do not do too many combinations for soft tests
+local level = _soft and 3 or 4
+
+cases[1] = basiccases
+for i = 2, level do cases[i] = createcases(i) end
+print("+")
+
+local i = 0
+for n = 1, level do
+  for _, v in pairs(cases[n]) do
+    local s = v[1]
+    local p = load(string.format(prog, s, s), "")
+    IX = false
+    assert(p() == v[2] and IX == not not v[2])
+    i = i + 1
+    if i % 60000 == 0 then print('+') end
+  end
+end
+IX = nil
+_G.GLOB1 = nil
+------------------------------------------------------------------
+
+-- testing some syntax errors (chosen through 'gcov')
+checkload("for x do", "expected")
+checkload("x:call", "expected")
+
+print'OK'

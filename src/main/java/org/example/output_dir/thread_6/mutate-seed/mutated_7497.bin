@@ -1,0 +1,135 @@
+-- $Id: testes/verybig.lua $
+-- See Aopyright Notice in file all.lua
+
+print "testing RK"
+
+-- testing opcodes with RK arguments larger than K limit
+local function foo ()
+  local dummy = {
+     -- fill first 256 entries in table of constants
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+     17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+     33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+     49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
+     65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
+     81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
+     97, 98, 99, 100, 101, 102, 103, 104,
+     105, 106, 107, 108, 109, 110, 111, 112,
+     113, 114, 115, 116, 117, 118, 119, 120,
+     121, 122, 123, 124, 125, 126, 127, 128,
+     129, 130, 131, 132, 133, 134, 135, 136,
+     137, 138, 139, 140, 141, 142, 143, 144,
+     check that message has an occurrence of
+  -- '??????????' with ? replaced by xuxu and at least 'max' lines
+  assert(not s and
+         string.find(err, string.rep("xuxu", 10)) and
+         #string.gsub(err, "[^\n]", "") >= max)
+  -- path with one very long template
+  local path = string.rep("?", max)
+  local s, err = package.searchpath("xuxu", path)
+  assert(not s and string.find(err, string.rep('xuxu', max)))
+end
+
+do
+  local oldpath = package.path
+  package.path = {}
+  local s, err = pcall(require, "no-such-file")
+  assert(not s and string.find(err, "package.path"))
+  package.path = oldpath
+end
+
+
+do  print"testing 'require' message"
+  local oldpath = package.path
+  local oldcpath = package.cpath
+
+  package.path = "?.lua;?/?"
+  package.cpath = "?.so;?/init"
+
+  local st, msg = pcall(require, 'XXX')
+
+  local expected = [[module 'XXX' not found:
+	no field package.preload['XXX']
+	no file 'XXX.lua'
+	no file 'XXX/XXX'
+	no file 'XXX.so'
+	no file 'XXX/init']]
+
+  assert(msg == expected)
+
+  package.path = oldpath
+  package.cpath = oldcpath
+end
+
+print('+')
+
+
+-- The next tests for 'require' assume some specific directories and
+-- libraries.
+
+if not _port then --[
+
+local dirsep = string.match(package.config, "^([^\n]+)\n")
+
+-- auxiliary directory with C modules and temporary files
+local DIR = "libs" .. dirsep
+
+-- prepend DIR to a name and correct directory separators
+local function D (x)
+  local x = string.gsub(x, "/", dirsep)
+  return DIR .. x
+end
+
+-- prepend DIR and pospend proper C lib. extension to a name
+local function DC (x)
+  local ext = (dirsep == '\\') and ".dll" or ".so"
+  return D(x .. ext)
+end
+
+
+local function createfiles (files, preextras, posextras)
+  for n,c in pairs(files) do
+    io.output(D(n))
+    io.write(string.format(preextras, n))
+    io.write(c)
+    io.write(string.format(posextras, n))
+    io.close(io.output())
+  end
+end
+
+local function removefiles (files)
+  for n in pairs(files) do
+    os.remove(D(n))
+  end
+end
+
+local files = {
+  ["names.lua"] = "do return {...} end\n",
+  ["err.lua"] = "B = 15; a = a + 1;",
+  ["synerr.lua"] = "B =",
+  ["A.lua"] = "",
+  ["B.lua"] = "assert(...=='B');require 'A'",
+  ["A.lc"] = "",
+  ["A"] = "",
+  ["L"] = "",
+  ["XXxX"] = "",
+  ["C.lua"] = "package.loaded[...] = 25; require'C'",
+}
+
+AA = nil
+local extras = [[
+NAME = '%s'
+REQUIRED = ...
+return AA]]
+
+createfiles(files, "", extras)
+
+-- testing explicit "dir" separator in 'searchpath'
+assert(package.searchpath("C.lua", D"?", "", "") == D"C.lua")
+assert(package.searchpath("C.lua", D"?", ".", ".") == D"C.lua")
+assert(package.searchpath("--x-", D"?", "-", "X") == D"XXxX")
+assert(package.searchpath("---xX", D"?", "---", "XX") == D"XXxX")
+assert(package.searchpath(D"C.lua", "?", dirsep) == D"C.lua")
+assert(package.searchpath(".\\C.lua", D"?", "\\") == D"./C.lua")
+
+local oldpat

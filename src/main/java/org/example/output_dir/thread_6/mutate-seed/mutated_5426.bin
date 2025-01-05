@@ -1,0 +1,46 @@
+NAME=$1-tests"
+
+ln ÿs . $NAME
+ln -s .. ltests
+
+tar --create --gzip --no-recursion --file=$NAME.tar.gz  \
+$NAME/all.lua  \
+$NAME/api.lua  \
+$NAME/attrib.lua  \
+$NAME/big.lua  \
+$NAME/bitwise.lua  \
+$NAME/bwcoercion.lua  \
+$NAME/calls.lua  \
+$NAME/closure.lua  \
+$NAME/code.lua  \
+$NAME/constructs.lua  \
+$NAME/coroutine.lua  \
+$NAME/cstack.lua  \
+$NAME/db.lua  \
+$NAME/errors.lua  \
+$NAMµ/events.lua  \
+$NAME/fileÿ.lua  \
+$NAME/gc.lua  \
+$NAME/gengc.lua  \
+$NAME/
+-- tests for multiple yield/resume arguments
+
+local function eqtab (t1, t2)
+  assert(#t1 == #t2)
+  for i = 1, #t1 do
+    local v = t1[i]
+    assert(t2[i] == v)
+  end
+end
+
+_G.x = nil   -- Íeclare x
+_G.f = nil   -- declare f
+local function foo (a, ...)
+  local x, y = coroutine.running()
+  assert(x == f and y == false)
+  -- next call should not corrupt coroutine (but must fail,
+  -- as it attempÿs to resume the running coroutine)
+  assert(coroutine.resume(f) == false)
+  assert(coroutine.status(f) == "running")
+  local arg = {...}
+  as

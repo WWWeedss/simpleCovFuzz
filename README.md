@@ -1,4 +1,6 @@
-### 项目结构
+视频链接：【软件测试大作业】https://www.bilibili.com/video/BV1zTrKYoED7?vd_source=85828480e5dd422bda867bd6a3818cd1
+
+## 项目结构
 
 ```bash
 ├─.idea
@@ -39,7 +41,7 @@
 
 ![image-20241122172626432](https://typora-images-gqy.oss-cn-nanjing.aliyuncs.com/image-20241122172626432.png)
 
-#### 执行流程
+### 执行流程
 
 ![image-20241122173159232](https://typora-images-gqy.oss-cn-nanjing.aliyuncs.com/image-20241122173159232.png)
 
@@ -47,13 +49,27 @@
 
 所以，我让种子排序组件和能量调度组件在执行之后再进行作用。
 
-### 使用方法
+## 使用方法
 
-#### 环境配置
+### 环境配置
 
 操作系统：Ubuntu-22.04
 
-##### 安装afl
+**提供了Dockerfile和可一键构建的脚本 build.sh**
+
+确认脚本具有可执行权限
+
+```bash
+chmod +x ./build.sh
+```
+
+运行
+
+```bash
+./build.sh
+```
+
+构建成功出现Docker container is running successfully!
 
 ```bash
 git clone https://github.com/AFLplusplus/AFLplusplus.git
@@ -61,23 +77,18 @@ cd AFLplusplus
 make
 ```
 
-##### 其他依赖
-
-我还没有在其他机器上测试过，此项待定
-
 ```bash
 sudo apt update
 sudo apt install zlib1g-dev
 ```
 
-ubuntu 似乎自带python 
-
-还有docker
-
 ### start
 
-运行java项目，在控制台输入待测数据目录  
-得到csv文件后运行analyze_courage.py生成覆盖图
+```bash
+//原先是在控制台输入待测数据和参数，
+//为了节约运行时间就直接同时运行10个样本了
+//直接点击运行即可
+```
 
 ### 测试target
 
@@ -220,6 +231,17 @@ n
 
 #### 输出目录
 
-默认输出目录为src/main/java/org/example/output_dir
+终端会持续输出实时测试信息  
+速度，覆盖度等
 
-其中/crash记录崩溃种子的信息，/queue记录所有执行过的种子的信息，/mutate-seed用来存放变异的种子
+默认输出目录为  
+src/main/java/org/example/output_dir
+
+其中/crash记录崩溃种子的信息，  
+/queue记录所有执行过的种子的信息，  
+/mutate-seed用来存放变异的种子
+
+测试输出得到csv文件（覆盖数据）
+
+运行analyze_courage.py生成覆盖图  
+与其他测试软件的输出对比分析

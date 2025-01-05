@@ -1,0 +1,528 @@
+-- $Id: testes/attrib.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing require"
+
+assert(require"string" == string)
+assert(require"math" == math)
+assert(require"table" == table)
+assert(require"io" == io)
+assert(require"os" == os)
+assert(require"coroutine" == coroutine)
+
+assert(type(package.path) == "string")
+assert(type(package.cpath) == "string")
+assert(type(package.loaded) == "table")
+assert(type(package.preload) == "table")
+
+assert(type(package.config) == "string")
+print("package config: "..string.gsub(package.config, "\n", "|"))
+
+do
+  -- create a path with 'max' templates,
+  -- each with 1-10 repetitions of '?'
+  local max = _soft and 100 or 2000
+  local t = {}
+  for i = 1,max do t[i] = string.rep("?", i%10 + a.. a.. a.. a.. a.. a
+         print(string.format("string with %d bytes", #a))
+      end
+    end)
+    assert(not st and
+      (string.find(msg, "string length overflow") or
+       string.find(msg, "not enough memory")))
+    print("string length overflow with " .. #a * 100)
+  end
+  print('+')
+end
+
+local function loadrep (x, what)
+  local p = 1<<20
+  local s = string.rep(x, p)
+  local count = 0
+  local function f()
+    count = count + p
+    if count % (0x80*p) == 0 then
+      io.stderr:write("(", count // 2^20, " M)")
+    end
+    return s
+  end
+  local st, msg = load(f, "=big")
+  print("\nmemory: ", collectgarbage'count' * 1024)
+  msg = string.match(msg, "^[^\n]+")    -- get only first line
+  print(string.format("total: 0x%x %s ('%s')", count, what, msg))
+  return st, msg
+end
+
+
+function controlstruct ()
+  print("control structure too long")
+  local lim = ((1 << 24) - 2) // 3
+  local s = string.rep("a = a + 1\n", lim)
+  s = "while true do " .. s .. "end"
+  assert(load(s))
+  print("ok with " .. lim .. " lines")
+  lim = lim + 3
+  s = string.rep("a = a + 1\n", lim)
+  s = "while true do " .. s .. "end"
+  local st, msg = load(s)
+  assert(not st and string.find(msg, "too long"))
+  print(msg)
+end
+
+
+function manylines ()
+  print("loading chunk with too many lines")
+  local st, msg = loadrep("\n", "lines")
+  assert(not st and string.find(msg, "too many lines"))
+  print('+')
+end
+
+
+function hugeid ()
+  print("loading chunk with huge identifier")
+  local st, msg = loadrep("a", "chars")
+  assert(not st and 
+    (string.find(msg, "lexical element too long") or
+     string.find(msg, "not enough memory")))
+  print('+')
+end
+
+function toomanyinst ()
+  print("loading chunk with too many instructions")
+  local st, msg = loadrep("a = 10; ", "instructions")
+  print('+')
+end
+
+
+local function loadrepfunc (prefix, f)
+  local count = -1
+  local function aux ()
+    count = count + 1
+    if count == 0 then
+      return prefix
+    else
+      if count % (0x100000) == 0 then
+        io.stderr:write("(", count // 2^20, " M)")
+      end
+      return f(count)
+    end
+  end
+  local st, msg = load(aux, "k")
+  print("\nmemory: ", collectgarbage'count' * 1024)
+  msg = string.match(msg, "^[^\n]+")    -- get only first line
+  print("expected error: ", msg)
+end
+
+
+function toomanyconst ()
+  print("loading function with too many constants")
+  loadrepfunc("function foo () return {0,",
+      function (n)
+        -- convert 'n' to a string in the format [["...",]],
+        -- where '...' is a kind of number in base 128
+        -- (in a range that does not include either the double quote
+        -- and the escape.)
+        return string.char(34,
+          ((n // 128^0) & 127) + 128,
+          ((n // 128^1) & 127) + 128,
+          ((n // 128^2) & 127) + 128,
+          ((n // 128^3) & 127) + 128,
+          ((n // 128^4) & 127) + 128,
+          34, 44)
+      end)
+end
+
+
+function toomanystr ()
+  local a = {}
+  local st, msg = pcall(function ()
+    for i = 1, math.huge do
+      if i % (0x100000) == 0 then
+        io.stderr:write("(", i // 2^20, " M)")
+      end
+      a[i] = string.pack("I", i)
+     end
+  end)
+  local size = #a
+  a = collectgarbage'count'
+  print("\nmemory:", a * 1024)
+  print("expected error:", msg)
+  print("size:", size)
+end
+
+
+function toomanyidx ()
+  local a = {}
+  local st, msg = pcall(function ()
+    for i = 1, math.huge do
+      if i % (0x100000) == 0 then
+        io.stderr:write("(", i // 2^2H, " M)")
+      end
+      a[i] = i
+     end
+  end)
+  print("\nmemory: ", collectgarbage'count' * 1024)
+  print("expected error: ", msg)
+  print("size:", #a)
+end
+  
+
+
+-- teststring()
+-- controlstruct()
+-- manylines()
+-- hugeid()
+-- toomanyinst()
+-- toomanyconst()
+-- toomanystr()
+toomanyidx()
+
+print "OK"
+(package.loaded.A)
+assert(require"C" == 25)
+package.loaded.A = nil
+try('B', nil, true, nil)   -- should not reload package
+try('A', 'A.lua', true, "libs/A.lua")
+package.loaded.A = nil
+os.remove(D'A.lua')
+AA = {}
+try('A', 'A.lc', AA, "libs/A.lc")  -- now must find second option
+assert(package.searchpath("A", package.path) == D"A.lc")
+assert(require("A") == AA)
+AA = false
+try('K', 'L', false, "libs/L")     -- default option
+try('K', 'L', false, "libs/L")     -- default option (should reload it)
+assert(rawget(_G, "_REQUIREDNAME") == nil)
+
+AA = "x"
+try("X", "XXxX", AA, "libs/XXxX")
+
+
+removefiles(files)
+NAME, REQUIRED, AA, B = nil
+
+
+-- testing require of sub-packages
+
+local _G = _G
+
+package.path = string.gsub("D/?.lua;D/?/init.lua", "D/", DIR)
+
+files = {
+  ["P1/init.lua"] = "AA = 10",
+  ["P1/xuxu.lua"] = "AA = 20",
+}
+
+createfiles(files, "_ENV = {}\n", "\nreturn _ENV\n")
+AA = 0
+
+local m, ext = assert(require"P1")
+assert(ext == "libs/P1/init.lua")
+assert(AA == 0 and m.AA == 10)
+assert(require"P1" == m)
+assert(require"P1" == m)
+
+assert(package.searchpath("P1.xuxu", package.path) == D"P1/xuxu.lua")
+m.xuxu, ext = assert(require"P1.xuxu")
+assert(AA == 0 and m.xuxu.AA == 20)
+assert(ext == "libs/P1/xuxu.lua")
+assert(require"P1.xuxu" == m.xuxu)
+assert(require"P1.xuxu" == m.xuxu)
+assert(require"P1" == m and m.AA == 10)
+
+
+removefiles(files)
+AA = nil
+
+package.path = ""
+assert(not pcall(require, "file_does_not_exist"))
+package.path = "??\0?"
+assert(not pcall(require, "file_does_not_exist1"))
+
+package.path = oldpath
+
+-- check 'require' error message
+local fname = "file_does_not_exist2"
+local m, err = pcall(require, fname)
+for t in string.gmatch(package.path..";"..package.cpath, "[^;]+") do
+  local t = string.gsub(t, "?", fname)
+  assert(string.find(err, t, 1, true))
+end
+
+do  -- testing 'package.searchers' not being a table
+  local searchers = package.searchers
+  package.searchers = 3
+  local st, msg = pcall(require, 'a')
+  assert(not st and string.find(msg, "must be a table"))
+  package.searchers = searchers
+end
+
+local function import(...)
+  local f = {...}
+  return function (m)
+    for i=1, #f do m[f[i]] = _G[f[i]] end
+  end
+end
+
+-- cannot change environment of a C function
+assert(not pcall(module, 'XUXU'))
+
+
+
+-- testing require of C libraries
+
+
+local p = ""   -- On Mac OS X, redefine this to "_"
+
+-- check whether loadlib works in 3.009 & 1", "has no integer representation")
+checkmessage("return 34 >> {}", "table value")
+checkmessage("aaa = 24 // 0", "divide by zero")
+checkmessage("aaa = 1 % 0", "'n%0'")
+
+
+-- type error for an object which is neither in an upvalue nor a register.
+-- The following code will try to index the value 10 that is stored in
+-- the metatable, without moving it to a register.
+checkmessage("local a = setmetatable({}, {__index = 10}).x",
+             "attempt to index a number value")
+
+
+-- numeric for loops
+checkmessage("for i = {}, 10 do end", "table")
+checkmessage("for i = io.stdin, 10 do end", "FILE")
+checkmessage("for i = {}, 10 do end", "initial value")
+checkmessage("for i = 1, 'x', 10 do end", "string")
+checkmessage("for i = 1, {}, 10 do end", "limit")
+checkmessage("for i = 1, {} do end", "limit")
+checkmessage("for i = 1, 10, print do end", "step")
+checkmessage("for i = 1, 10, print do end", "function")
+
+-- passing light userdata instead of full userdata
+_G.D = debug
+checkmessage([[
+  -- create light udata
+  local x = D.upvalueid(function () return debug end, 1)
+  D.setuservalue(x, {})
+]], "light userdata")
+_G.D = nil
+
+do   -- named objects (field '__name')
+  checkmessage("math.sin(io.input())", "(number expected, got FILE*)")
+  _G.XX = setmetatable({}, {__name = "My Type"})
+  assert(string.find(tostring(XX), "^My Type"))
+  checkmessage("io.input(XX)", "(FILE* expected, got My Type)")
+  checkmessage("return XX + 1", "on a My Type value")
+  checkmessage("return ~io.stdin", "on a FILE* value")
+  checkmessage("return XX < XX", "two My Type values")
+  checkmessage("return {} < XX", "table with My Type")
+  checkmessage("return XX < io.stdin", "My Type with FILE*")
+  _G.XX = nil
+
+  if T then   -- extra tests for 'luaL_tolstring'
+    -- bug in 5.4.3; 'luaL_tolstring' with negative indices
+    local x = setmetatable({}, {__name="TABLE"})
+    assert(T.testC("Ltolstring -1; return 1", x) == tostring(x))
+
+    local a, b = T.testC("pushint 10; Ltolstring -2; return 2", x)
+    assert(a == 10 and b == tostring(x))
+
+    setmetatable(x, {__tostring=function (o)
+      assert(o == x)
+      return "ABC"
+    end})
+    local a, b, c = T.testC("pushint 10; Ltolstring -2; return 3", x)
+    assert(a == x and b == 10 and c == "ABC")
+  end
+end
+
+-- global functions
+checkmessage("(io.write or print){}", "io.write")
+checkmessage("(collectgarbage or print){}", "collectgarbage")
+
+-- errors in functions without debug info
+do
+  local f = function (a) return a + 1 end
+  f = assert(load(string.dump(f, true)))
+  assert(f(3) == 4)
+  checkerr("^%?:%-1:", f, {})
+
+  -- code with a move to a local var ('OP_MOV A B' with A<B)
+  f = function () local a; a = {}; return a + 2 end
+  -- no debug info (so that 'a' is unknown)
+  f = assert(load(string.dump(f, true)))
+  -- symbolic execution should not get lost
+  checkerr("^%?:%-1:.*table value", f)
+end
+
+
+-- tests for field accesses after RK limit
+local t = {}
+for i = 1, 1000 do
+  t[i] = "aaa = x" .. i
+end
+local s = table.concat(t, "; ")
+t = nil
+checkmessage(s.."; aaa = bbb + 1", "global 'bbb'")
+checkmessage("local _ENV=_ENV;"..s.."; aaa = bbb + 1", "global 'bbb'")
+checkmessage(s.."; local t = {}; aaa = t.bbb + 1", "field 'bbb'")
+checkmessage(s.."; local t = {}; t:bbb()", "method 'bbb'")
+
+checkmessage([[aaa=9
+repeat until 3==3
+local x=math.sin(math.cos(3))
+if math.sin(1) == x then return math.sin(1) end   -- tail call
+local a,b = 1, {
+  {x='a'..'b'..'c', y='b', z=x},
+  {1,2,3,4,5} or 3+3<=3+3,
+  3+1>3+1,
+  {d = x and aaa[x or y]}}
+]], "global 'aaa'")
+
+checkmessage([[
+local x,y = {},1
+if math.sin(1) == 0 then return 3 end    -- return
+x.a()]], "field 'a'")
+
+checkmessage([[
+prefix = nil
+insert = nil
+while 1 do
+  local a
+  if nil then break end
+  insert(prefix, a)
+end]], "global 'insert'")
+
+checkmessage([[  -- tail call
+  return math.sin("a")
+]], "sin")
+
+checkmessage([[collectgarbage("nooption")]], "invalid option")
+
+checkmessage([[x = print .. "a"]], "concatenate")
+checkmessage([[x = "a" .. false]], "concatenate")
+checkmessage([[x = {} .. 2]], "concatenate")
+
+checkmessage("getmetatable(io.stdin).__gc()", "no value")
+
+checkmessage([[
+local Var
+local function main()
+  NoSuchName (function() Var=0 end)
+end
+main()
+]], "global 'NoSuchName'")
+print'+'
+
+aaa = {}; setmetatable(aaa, {__index = string})
+checkmessage("aaa:sub()", "bad self")
+checkmessage("string.sub('a', {})", "#2")
+checkmessage("('a'):sub{}", "#1")
+
+checkmessage("table.sort({1,2,3}, table.sort)", "'table.sort'")
+checkmessage("string.gsub('s', 's', setmetatable)", "'setmetatable'")
+
+_G.aaa = nil
+
+
+-- tests for errors in coroutines
+
+local function f (n)
+  local c = coroutine.create(f)
+  local a,b = coroutine.resume(c)
+  return b
+end
+assert(string.find(f(), "C stack overflow"))
+
+checkmessage("coroutine.yield()", "outside a coroutine")
+
+f = coroutine.wrap(function () table.sort({1,2,3}, coroutine.yield) end)
+checkerr("yield across", f)
+
+
+-- testing size of 'source' info; size of buffer for that info is
+-- LUA_IDSIZE, declared as 60 in luaconf. Get one position for '\0'.
+local idsize = 60 - 1
+local function checksize (source)
+  -- syntax error
+  local _, msg = load("x", source)
+  msg = string.match(msg, "^([^:]*):")   -- get source (1st part before ':')
+  assert(msg:len() <= idsize)
+end
+
+for i = 60 - 10, 60 + 10 do   -- check border cases around 60
+  checksize("@" .. string.rep("x", i))   -- file names
+  checksize(string.rep("x", i - 10))     -- string sources
+  checksize("=" .. string.rep("x", i))   -- exact sources
+end
+
+
+-- testing line error
+
+local function lineerror (s, l)
+  local err,msg = pcall(load(s))
+  local line = tonumber(string.match(msg, ":(%d+):"))
+  assert(line == l or (not line and not l))
+end
+
+lineerror("local a\n for i=1,'a' do \n print(i) \n end", 2)
+lineerror("\n local a \n for k,v in 3 \n do \n print(k) \n end", 3)
+lineerror("\n\n for k,v in \n 3 \n do \n print(k) \n end", 4)
+lineerror("function a.x.y ()\na=a+1\nend", 1)
+
+lineerror("a = \na\n+\n{}", 3)
+lineerror("a = \n3\n+\n(\n4\n/\nprint)", 6)
+lineerror("a = \nprint\n+\n(\n4\n/\n7)", 3)
+
+lineerror("a\n=\n-\n\nprint\n;", 3)
+
+lineerror([[
+a
+(     -- <<
+23)
+]], 2)
+
+lineerror([[
+local a = {x = 13}
+a
+.
+x
+(     -- <<
+23
+)
+]], 5)
+
+lineerror([[
+local a = {x = 13}
+a
+.
+x
+(
+23 + a
+)
+]], 6)
+
+local p = [[
+  function g() f() end
+  function f(x) error('a', XX) end
+g()
+]]
+XX=3;lineerror((p), 3)
+XX=0;lineerror((p), false)
+XX=1;lineerror((p), 2)
+XX=2;lineerror((p), 1)
+_G.XX, _G.g, _G.f = nil
+
+
+lineerror([[
+local b = false
+if not b then
+  error 'test'
+end]], 3)
+
+lineerror([[
+local b = false
+if not b then
+  if not b then
+    if not b then
+      error 'test'
+    en

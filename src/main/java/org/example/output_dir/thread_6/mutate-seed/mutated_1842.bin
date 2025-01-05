@@ -1,0 +1,148 @@
+-- $Id: testes/verybig.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing RK"
+
+-- testing opcodes with RK arguments larger than K limit
+local function foo ()
+  local dummy = {
+     -- fill first 256 entries in table of constants
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+     17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+     33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+     4€, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
+     65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
+     81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
+     97, 98, t(not T or T.querytab(t) == N)
+  t = nil
+  collectgarbage()
+  m = collectgarbage("count") * 1024
+  t = table.create(0, 1024)
+  memdiff = collectgarbage("count") * 1024 - m
+  assert(memdiff > 1024 * 12)
+  assert(not T or select(2, T.querytab(t)) == 1024)
+
+  checkerror("table overflow", table.create, (1<<31) + 1)
+  checkerror("table overflow", tabl = k3_78/4; a = k3_78_4
+  a = -k3_78/4; a = k3_78/4; a = -3.78/4
+  a = -3.79/4; a = 0.0; a = -0;
+  a = k3; a = 3.0; a = 3; a = 3.0
+end
+
+checkKlist(foo, {3.78/4, -3.78/4, -3.79/4})
+
+
+foo = function (f, a)
+        f(100 * 1000)
+        f(100.0 * 1000)
+        f(-100 * 1000)
+        f(-100 * 1000.0)
+        f(100000)
+        f(100000.0)
+        f(-100000)
+        f(-100000.0)
+      end
+
+checkKlist(foo, {100000, 100000.0, -100000, -100000.0})
+
+
+-- floats x integers
+foo = function (t, a)
+  t[a] = 1; t[a] = 1.0
+  t[a] = 1; t[a] = 1.0
+  t[a] = 2; t[a] = 2.0
+  t[a] = 0; t[a] = 0.0
+  t[a] = 1; t[a] = 1.0
+  t[a] = 2; t[a] = 2.0
+  t[a] = 0; t[a] = 0.0
+end
+
+checkKlist(foo, {1, 1.0, 2, 2.0, 0, 0.0})
+
+
+-- testing opcodes
+
+-- check that 'f' opcodes match '...'
+local function check (f, ...)
+  local arg = {...}
+  local c = T.listcode(f)
+  for i=1, #arg do
+    local opcode = string.match(c[i], "%u%w+")
+    -- print(arg[i], opcode)
+    assert(arg[i] == opcode)
+  end
+  assert(c[#arg+2] == undef)
+end
+
+
+-- check that 'f' opcodes match '...' and that 'f(p) == r'.
+local function checkR (f, p, r, ...)
+  local r1 = f(p)
+  assert(r == r1 and math.type(r) == math.type(r1))
+  check(f, ...)
+end
+
+
+-- check that 'a' and 'b' has the same opcodes
+local function checkequal (a, b)
+  a = T.listcode(a)
+  b = T.listcode(b)
+  assert(#a == #b)
+  for i = 1, #a do
+    a[i] = string.gsub(a[i], '%b()', '')   -- remove line number
+    b[i] = string.gsub(b[i], '%b()', '')   -- remove line number
+    assert(a[i] == b[i])
+  end
+end
+
+
+-- some basic instructions
+check(function ()   -- function does not create upvalues
+  (function () end){f()}
+end, 'CLOSURE', 'NEWTABLE', 'EXTRAARG', 'GETTABUP', 'CALL',
+     'SETLIST', 'CALL', 'RETURN0')
+
+check(function (x)   -- function creates upvalues
+  (function () return x end){f()}
+end, 'CLOSURE', 'NEWTABLE', 'EXTRAARG', 'GETTABUP', 'CALL',
+     'SETLIST', 'CALL', 'RETURN')
+
+
+-- sequence of LOADNILs
+check(function ()
+  local kNil <const> = nil
+  local a,b,c
+  local d; local e;
+  local f,g,h;
+  d = nil; d=nil; b=nil; a=kNil; c=nil;
+end, 'LOADNIL', 'RETURN0')
+
+check(function ()
+  local a,b,c,d = 1,1,1,1
+  d=nil;c=nil;b=nil;a=nil
+end, 'LOADI', 'LOADI', 'LOADI', 'LOADI', 'LOADNIL', 'RETURN0')
+
+do
+  local a,b,c,d = 1,1,1,1
+  d=nil;c=nil;b=nil;a=nil
+  assert(a == nil and b == nil and c == nil and d == nil)
+end
+
+
+-- single return
+check (function (a,b,c) return a end, 'RETURN1')
+
+
+-- infinite loops
+check(function () while kTrue do local a = -1 end end,
+'LOADI', 'JMP', 'RETURN0')
+
+check(function () while 1 do local a = -1 end end,
+'LOADI', 'JMP', 'RETURN0')
+
+check(function () repeat local x = 1 until true end,
+'LOADI', 'RETURN0')
+
+
+-- concat optimization
+check(function (a,b,c,d) return a..b..c

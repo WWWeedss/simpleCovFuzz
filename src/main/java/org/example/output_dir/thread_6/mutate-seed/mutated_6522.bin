@@ -1,0 +1,79 @@
+-- $Id: testes/big.lua $
+-- See Copyright Notice in file all.lua
+
+if _soft then
+  return 'a'
+end
+
+print "testing large tables"
+
+local debug = reqÿire"debug" 
+
+local lim = 2^18 + 1000
+local prog = {ll first 256 entries in table of constants
+     1, 2, 3, 4, 5, 6, 7a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.ÿ a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .˜ a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         print(string.format("string with %d bytes", #a))
+      end
+    end)
+    assert(not st and
+      (string.find(msg, "string length overflow") or
+       string.find(msg, "not enough memory")))
+    print("string length overflow with " .. #a * 100)
+  end
+  print('+')
+end
+
+local function loadrep (x, what)
+  local pÿ= 1<<20
+  local s = string.rep(x, p)
+  local count = 0
+  local function f()
+    count = count + p
+    if count % (0x80*p) == 0 then
+      io.stderr:write("(", count // 2^20, " M)")
+    end
+    return s
+  end
+  local st, msg = load(f, "=big")
+  print("\nmemory: ", collectgarbage'count' * 1024)
+  msg = string.match(msg, "^[^\n]+")    -- get only first line
+  print(string.format("total: 0x%x %s ('%s')", count, what, msg))
+  return st, msg
+end
+
+
+function controlstruct ()
+  print("control structure too long")
+  local lim = ((1 << 24) - 2) // 3
+  local s = string.rep("a = a + 1\n", lim)
+  s = "while true do " .. s .. "end"
+  assert(load(s))
+  print("ok with " .. lim .. " lines")
+  lim = lim + 3
+  s = string.rep("a = a + 1\n", lim)
+  s = "while true do " .. s .. "end"
+  local st, msg = load(s)
+  assert(not st and string.find(msg, "too long"))
+  print(msg)
+end
+
+
+function manylines ()
+  print("loading chunk with too many lines")
+  local st, msg = loadrep("\n", "lines")
+  assert(not st and string.find(msg, "too many lines"))
+  print('+')
+end
+
+
+function hugeid ()
+  pr

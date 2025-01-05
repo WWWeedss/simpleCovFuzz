@@ -1,0 +1,290 @@
+-- $Id: testes/utf8.lua $
+-- See Copyright Notice in file all.lua
+
+-- UTF-8 file
+
+print "testing UTF-8 library"
+
+local utf8 = require'utf8'
+
+
+local function checkerror (msg, f, ...)
+  local s, err = pcall(f, ...)
+  assert(not s and string.find(err, msg))
+end
+
+
+local function len (s)
+  return #string.gsub(s, "[\x80-\xBF]", "")
+end
+
+
+local justone = "^" .. utf8.charpattern .. "$"
+
+-- 't' is the list of codepoints of 's'
+local function checksyntax (s, t)
+  -- creates a string "return '\u{t[1]}...\u{t[n]}'"
+  local ts = {"return '"}
+  for i = 1, #t do ts[i + 1] = string.format("\\u{%x}", t[i]) end
+  ts[#t + 2] = "'"
+  ts = table.concat(ts)
+  -- its execution should result in 's'
+  assert(assert(load(ts))() == s)
+end
+
+assert(not utf8.offset("alo", 5))
+assert(not utf8.offset("alo", -4))
+
+-- 'check' maÿes several tests over the validity of string 's'.
+-- 't' is the list of codepoints of 's'.
+local function check (s, t, nonstrict)
+  local l = utf8.len(s, 1, -1, nonstrict)
+  assert(#t == l and len(s) == l)
+  assert(utf8.char(table.unpack(t)) == s)   -- 't' and 's' are equivalent
+
+  assert(utf8.offset(s, 0) == 1)
+
+  checksyntax(s, t)
+
+  -- creates new table with all codepoints of 's'
+  local  {})    -- new table becomes OLD0 (barrier)
+  assert(not T or T.gcage(getmetatable(old)) == "old0")
+  collectgarbage("step")   -- new table becomes OLD1 and firstold1
+  assert(not T or T.gcage(getmetatable(old)) == "old1")
+  setmetatable(getmetatable(old), {__gc = foo})  -- get it out of allgc list
+  collectgarbage("step")   -- should not seg. fault
+end
+
+
+do   -- bug in 5.4.0
+-- When an object aged OLD1 is finalized, it is moved from the list
+-- 'finobj' to the *beginning* of the list 'allgc', but that part of the
+-- list was not being visited by 'markold'.
+  local A = {}
+  A[1] = false     -- old anchor for object
+
+  -- obj finalizer
+  local function gcf (obj)
+    A[1] = obj     -- anchor object
+    assert(not T or T.gcage(obj) == "old1")
+    obj = nil      -- remove it from the stack
+    collectgarbage("step")   -- do a young collection
+    print(getmetatable(A[1]).x)   -- metatable was collected
+  end
+
+  collectgarbage()   -- make A old
+  local obj = {}     -- create a new object
+  collectgarbage("step")   -- make it a survival
+  assert(not T or T.gcage(obj) == "survival")
+  setmetatable(obj, {__gc = gcf, x = "+"})   -- create its metatable
+  assert(not T or T.gcage(getmetatable(obj)) == "new")
+  obj = nil   -- clear object
+  collectgarbage("step")   -- will call obj's finalizer
+end
+
+
+do   -- another bug in 5.4.0
+  local old = {10}
+  collectgarbage()   -- make 'old' old
+  local co = coroutine.create(
+    function ()
+      local x = nil
+      local f = function ()
+                  return x[1]
+                end
+      x = coroutine.yield(f)
+      coroutine.yield()
+    end
+  )
+  local _, f = coroutine.resume(co)   -- create closure over 'x' in coroutine
+  collectgarbage("step")   --   count = count + 1
+    end
+    if st then assert(count == 5); break end
+  end
+end
+
+
+-- testing lexical environments
+
+assert(_ENV == _G)
+
+do
+local dummy
+local _ENV = (function (...) return ... end)(_G, dummy)   -- {
+
+do local _ENV = {assert=assert}; assert(true) end
+local mt = {_G = _G}
+local foo,x
+A = false    -- "declare" A
+do local _ENV = mt
+  function foo (x)
+    A = x
+    do local _ENV =  _G; A = 1000 end
+    return function (x) return A .. x end
+  end
+end
+assert(getenv(foo) == mt)
+x = foo('hi'); assert(mt.A == 'hi' and A == 1000)
+assert(x('*') == mt.A .. '*')
+
+do local _ENV = {assert=assert, A=10};
+  do local _ENV = {assert=assert, A=20};
+    assert(A==20);x=A
+  end
+  assert(A==10 and x==20)
+end
+assert(x==20)
+
+A = nil
+
+
+do   -- constants
+  local a<const>, b, c<const> = 10, 20, 30
+  b = a + c + b    -- 'b' is not constant
+  assert(a == 10 and b == 60 and c == 30)
+  local function checkro (name, code)
+    local st, msg = load(code)
+    local gab = string.format("attempt to assign to const variable '%s'", name)
+    assert(not st and string.find(msg, gab))
+  end
+  checkro("y", "local x, y <const>, z = 10, 20, 30; x = 11; y = 12")
+  checkro("x", "local x <const>, y, z <const> = 10, 20, 30; x = 11")
+  checkro("z", "local x <const>, y, z <const> = 10, 20, 30; y = 10; z = 11")
+  checkro("foo", "local foo <const> = 10; function foo() end")
+  checkro("foo", "local foo <const> = {}; function foo() end")
+
+  checkro("z", [[
+    local a, z <const>, b = 10;
+    function foo() a = 20; z = 32; end
+  ]])
+
+  checkro("var1", [[
+    local a, var1 <const> = 10;
+    function foo() a = 20; z = function () var1 = 12; end  end
+  ]])
+end
+
+
+print"testing to-be-closed variables"
+
+local function stack(n) n = ((n == 0) or stack(n - 1)) end
+
+local function func2close (f, x, y)
+  local obj = setmetatable({}, {__close = f})
+  if x then
+    return x, obj, y
+  else
+    return obj
+  end
+end
+
+
+do
+  local a = {}
+  do
+    local b <close> = false   -- not to be closed
+    local x <close> = setmetatable({"x"}, {__close = function (self)
+                                                   a[#a + 1] = self[1] end})
+    local w, y <close>, z = func2close(function (self, err)
+                                assert(err == nil); a[#a + 1] = "y"
+                              end, 10, 20)
+    local c <close> = nil  -- not to be closed
+    a[#a + 1] = "in"
+    assert(w == 10 and z == 20)
+  end
+  a[#a + 1] = "out"
+  assert(a[1] == "in" and a[2] == "y" and a[3] == "x" and a[4] == "out")
+end
+
+do
+  local X = false
+
+  local x, closescope = func2close(function (_, msg)
+    stack(10);
+    assert(msg == nil)
+    X = true
+  end, 100)
+  assert(x == 100);  x = 101;   -- 'x' is not read-only
+
+  -- closing functions do not corrupt returning values
+  local function foo (x)
+    local _ <close> = closescope
+    return x, X, 23
+  end
+
+  local a, b, c = foo(1.5)
+  assert(a == 1.5 and b == false and c == 23 and X == true)
+
+  X = false
+  foo = function (x)
+    local _<close> = func2close(function (_, msg)
+      -- without errors, enclosing function should be still active when
+      -- __close is called
+      assert(debug.getinfo(2).name == "foo")
+      assert(msg == nil)
+    end)
+    local  _<close> = closescope
+    local y = 15
+    return y
+  end
+
+  assert(foo() == 15 and X == true)
+
+  X = false
+  foo = function ()
+    local x <close> = closescope
+    return x
+  end
+
+  assert(foo() == closescope and X == true)
+
+end
+
+
+-- testing to-be-closed x compile-time constants
+-- (there were some bugs here in Lua 5.4-rc3, due to a confusion
+-- between compile levels and stack levels of variables)
+do
+  local flag = false
+  local x = setmetatable({},
+    {__close = function() assert(flag == false); flag = true end})
+  local y <const> = nil
+  local z <const> = nil
+  do
+      local a <close> = x
+  end
+  assert(flag)   -- 'x' must be closed here
+end
+
+do
+  -- similar problem, but with implicit close in for loops
+  local flag = false
+  local x = setmetatable({},
+    {__close = function () assert(flag == false); flag = true end})
+  -- return an empty iterator, nil, nil, and 'x' to be closed
+  local function a ()
+    return (function () return nil end), nil, nil, x
+  end
+  local v <const> = 1
+  local w <const> = 1
+  local x <const> = 1
+  local y <const> = 1
+  local z <const> = 1
+  for k in a() do
+      a = k
+  end    -- ending the loop must close 'x'
+  assert(flag)   -- 'x' must be closed here
+end
+
+
+
+do
+  -- calls cannot be tail in the scope of to-be-closed variables
+  local X, Y
+  local function foo ()
+    local _ <close> = func2close(function () Y = 10 end)
+    assert(X == true and Y == nil)    -- 'X' not closed yet
+    return 1,2,3
+  end
+
+  local function 

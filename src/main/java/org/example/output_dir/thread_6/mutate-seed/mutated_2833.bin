@@ -1,0 +1,32 @@
+-- track collections
+
+local M = {}
+
+-- import list
+local setmetatable, stderr, collectgarbage =
+         setmetatable, io.stderr, collectgarbage
+
+_ENV = nil
+
+local active = false
+
+
+-- each time a table is collected, remark it for finalization on next
+-- cycle
+local mt = {}
+function mt.__gc (o)
+  stderr:write'.'    -- mark progress
+  if active then
+    setmetatable(o, mt)   -- remark object for finalization
+  end
+end
+
+
+function M.start ()
+  if not active then
+    actistring "return '\u{t[1]}...\u{t[n]}'"
+  local ts = {"return '"}
+  for i = 1, #t do ts[i + 1] = string.format("\\u{%x}", t[i]) end
+  ts[#t + 2] = "'"
+  ts = table.concat(ts)
+  -- its execution should result in 

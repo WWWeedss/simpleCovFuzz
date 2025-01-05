@@ -1,0 +1,1036 @@
+-- $Id: testes/db.lua $
+-- See Copyright Notice in file all.lua
+
+-- testing debug library
+
+local debug = require "debug"
+
+local function dostring(s) return assert(load(s))() end
+
+print"testing debug library and debug information"
+
+do
+local a=1
+end
+
+assert(not debug.gethook())
+
+local testline = 19         -- line where 'test' is defined
+local function test (s, l, p)     -- this must be line 19
+  collectgarbage()   -- avoid gc during trace
+  local function f (event, line)
+    assert(event == 'line')
+    local l = table.remove(l, 1)
+    if p then print(l, line) end
+    assert(l == line, "wrong trace!!")
+  end
+  debug.sethook(f,"l"); load(s)(); debug.sethook()
+  assert(#l == 0)
+end
+
+
+do
+  assert(not pcall(debug.getinfo, print, "X"))   -- invalid option
+  assert(not pcall(debug.getinfo, 0, ">"))   -- invalid option
+  assert(not debug.getinfo(1000))   -- out of range level
+  assert(not debug.getinfo(-1))     -- out of range level
+  local a = debug.getinfo(print)
+  assert(a.what == "C" and a.short_src == "[C]")
+  a = debug.getinfo(print, "L")
+  assert(a.activelines == nil)
+  local b = debug.getinfo(test, "SfL")
+  assert(b.name == nil and b.what == "Lua" and b.linedefined == testline and
+         b.lastlinedefined == b.linedefined + 10 and
+         b.func == test and not string.find(b.short_src, "%["))
+  assert(b.activelines[b.linedefined + 1] and
+         b.activelines[b.lastlinedefined])
+  assert(not b.activelines[b.linedefined] and
+         not b.activelines[b.lastlinedefined + 1])
+end
+
+
+--  bug in 5.4.4-5.4.6: activelines in vararg functions
+--  without debug information
+do
+  local func = load(string.dump(load("print(10)"), true))
+  local actl = debug.getinfo(func, "L").activelines
+  assert(#actl == 0)   -- no line info
+end
+
+
+-- test file and string names truncation
+local a = "function f () end"
+local function dostring (s, x) return load(s, x)() end
+dostring(a)
+assert(debug.getinfo(f).short_src == string.format('[string "%s"]', a))
+dostring(a..string.format("; %s\n=1", string.rep('p', 400)))
+assert(string.find(debug.getinfo(f).short_src, '^%[string [^\n]*%.%.%."%]$'))
+dostring(a..string.format("; %s=1", string.rep('p', 400)))
+assert(string.find(debug.getinfo(f).short_src, '^%[string [^\n]*%.%.%."%]$'))
+dostring("\n"..a)
+assert(debug.getinfo(f).short_src == '[string "..."]')
+dostring(a, "")
+assert(debug.getinfo(f).short_src == '[string ""]')
+dostring(a, "@xuxu")
+assert(debug.getinfo(f).short_src == "xuxu")
+dostring(a, "@"..string.rep('p', 1000)..'t')
+assert(string.find(debug.getinfo(f).short_src, "^%.%.%.p*t$"))
+dostring(a, "=xuxu")
+assert(debug.getinfo(f).short_src == "xuxu")
+dostring(a, string.format("=%s", string.rep('x', 500)))
+assert(string.find(debug.getinfo(f).short_src, "^x*$"))
+dostring(a, "=")
+assert(debug.getinfo(f).short_src == "")
+_G.a = nil; _G.f = nil;
+_G[string.rep("p", 400)] = nil
+
+
+repeat
+  local g = {x = function ()
+    local a = debug.getinfo(2)
+    assert(a.name == 'f' and a.namewhat == 'local')
+    a = debug.getinfo(1)
+    assert(a.name == 'x' and a.namewhat == 'field')
+    return 'xixi'
+  end}
+  local f = function () return 1+1 and (not 1 or g.x()) end
+  assert(f() == 'xixi')
+  g = debug.getinfo(f)
+  assert(g.what == "Lua" and g.func == f and g.namewhat == "" and not g.name)
+
+  function f (x, name)   -- local!
+    name = name or 'f'
+    local a = debug.getinfo(1)
+    assert(a.name == name and a.namewhat == 'local')
+    return x
+  end
+
+  -- breaks in different conditions
+  if 3>4 then break end; f()
+  if 3<4 then a=1 else break end; f()
+  while 1 do local x=10; break end; f()
+  local b = 1
+  if 3>4 then return math.sin(1) end; f()
+  a = 3<4; f()
+  a = 3<4 or 1; f()
+  repeat local x=20; if 4>3 then f() else break end; f() until 1
+  g = {}
+  f(g).x = f(2) and f(10)+f(9)
+  assert(g.x == f(19))
+  function g(x) if not x then return 3 end return (x('a', 'x')) end
+  assert(g(f) == 'a')
+until 1
+
+test([[if
+math.sin(1)
+then
+  a=1
+else
+  a=2
+end
+]], {2,3,4,7})
+
+
+test([[
+local function foo()
+end
+foo()
+A = 1
+A = 2
+A = 3
+]], {2, 3, 2, 4, 5, 6})
+_G.A = nil
+
+
+test([[--
+if nil then
+  a=1
+else
+  a=2
+end
+]], {2,5,6})
+
+test([[a=1
+repeat
+  a=a+1
+until a==3
+]], {1,3,4,3,4})
+
+test([[ do
+  return
+end
+]], {2})
+
+test([[local a
+a=1
+while a<=3 do
+  a=a+1
+end
+]], {1,2,3,4,3,4,3,4,3,5})
+
+test([[while math.sin(1) do
+  if math.sin(1)
+  then break
+  end
+end
+a=1]], {1,2,3,6})
+
+test([[for i=1,3 do
+  a=i
+end
+]], {1,2,1,2,nal 'd's are all different
+for i = 3, 5, 2 do
+  for j = 1, 6 do
+    assert((debug.upvalueid(a[i], 4) == debug.upvalueid(a[j], 4))
+      == (i == j))
+  end
+end
+
+--------------------------------------------------------------------------------
+-- testing if x goto optimizations
+
+local function testG (a)
+  if a == 1 then
+    goto l1
+    error("should never be here!")
+  elseif a == 2 then goto l2
+  elseif a == 3 then goto l3
+  elseif a == 4 then
+    goto l1  -- go to inside the block
+    error("should never be here!")
+    ::l1:: a = a + 1   -- must go to 'if' end
+  else
+    goto l4
+    ::l4a:: a = a * 2; goto l4b
+    error("should never be here!")
+    ::l4:: goto l4a
+    error("should never be here!")
+    ::l4b::
+  end
+  do return a end
+  ::l2:: do return "2" end
+  ::l3:: do return "3" end
+  ::l1:: return "1"
+end
+
+assert(testG(1) == "1")
+assert(testG(2) == "2")
+assert(testG(3) == "3")
+assert(testG(4) == 5)
+assert(testG(5) == 10)
+
+do
+  -- if x back goto out of scope of upvalue
+  local X
+  goto L1
+
+  ::L2:: goto L3
+
+  ::L1:: do
+    local a <close> = setmetatable({}, {__close = function () X = true end})
+    assert(X == nil)
+    if a then goto L2 end   -- jumping back out of scope of 'a'
+  end
+
+  ::L3:: assert(X == true)   -- checks that 'a' was correctly closed
+end
+--------------------------------------------------------------------------------
+
+
+print'OK'
+lines(function (a, b, ...) end, {0})
+
+  checkactivelines(function (a, b)
+  end, {1})
+
+  for _, n in pairs{0, 1, 2, 10, 50, 100, 1000, 10000} do
+    checkactivelines(
+      load(string.format("%s return 1", string.rep("\n", n))),
+      {n + 1})
+  end
+
+end
+
+print'+'
+
+-- invalid levels in [gs]etlocal
+assert(not pcall(debug.getlocal, 20, 1))
+assert(not pcall(debug.setlocal, -1, 1, 10))
+
+
+-- parameter names
+local function foo (a,b,...) local d, e end
+local co = coroutine.create(foo)
+
+assert(debug.getlocal(foo, 1) == 'a')
+assert(debug.getlocal(foo, 2) == 'b')
+assert(not debug.getlocal(foo, 3))
+assert(debug.getlocal(co, foo, 1) == 'a')
+assert(debug.getlocal(co, foo, 2) == 'b')
+assert(not debug.getlocal(co, foo, 3))
+
+assert(not debug.getlocal(print, 1))
+
+
+local function foo () return (debug.getlocal(1, -1)) end
+assert(not foo(10))
+
+
+-- varargs
+local function foo (a, ...)
+  local t = table.pack(...)
+  for i = 1, t.n do
+    local n, v = debug.getlocal(1, -i)
+    assert(n == "(vararg)" and v == t[i])
+  end
+  assert(not debug.getlocal(1, -(t.n + 1)))
+  assert(not debug.setlocal(1, -(t.n + 1), 30))
+  if t.n > 0 then
+    (function (x)
+      assert(debug.setlocal(2, -1, x) == "(vararg)")
+      assert(debug.setlocal(2, -t.n, x) == "(vararg)")
+     end)(430)
+     assert(... == 430)
+  end
+end
+
+foo()
+foo(print)
+foo(200, 3, 4)
+local a = {}
+for i = 1, (_soft and 100 or 1000) do a[i] = i end
+foo(table.unpack(a))
+
+
+
+do   -- test hook presence in debug info
+  assert(not debug.gethook())
+  local count = 0
+  local function f ()
+    assert(debug.getinfo(1).namewhat == "hook")
+    local sndline = string.match(debug.traceback(), "\n(.-)\n")
+    assert(string.find(sndline, "hook"))
+    count = count + 1
+  end
+  debug.sethook(f, "l")
+  local a = 0
+  _ENV.a = a
+  a = 1
+  debug.sethook()
+  assert(count == 4)
+end
+_ENV.a = nil
+
+
+-- hook table has weak keys
+assert(getmetatable(debug.getregistry()._HOOKKEY).__mode == 'k')
+
+
+a = {}; local L = nil
+local glob = 1
+local oldglob = glob
+debug.sethook(function (e,l)
+  collectgarbage()   -- force GC during a hook
+  local f, m, c = debug.gethook()
+  assert(m == 'crl' and c == 0)
+  if e == "line" then
+    if glob ~= oldglob then
+      L = l-1   -- get the first line where "glob" has changed
+      oldglob = glob
+    end
+  elseif e == "call" then
+      local f = debug.getinfo(2, "f").func
+      a[f] = 1
+  else assert(e == "return")
+  end
+end, "crl")
+
+
+function f(a,b)
+  collectgarbage()
+  local _, x = debug.getlocal(1, 1)
+  local _, y = debug.getlocal(1, 2)
+  assert(x == a and y == b)
+  assert(debug.setlocal(2, 3, "pera") == "AA".."AA")
+  assert(debug.setlocal(2, 4, "manga") == "B")
+  x = debug.getinfo(2)
+  assert(x.func == g and x.what == "Lua" and x.name == 'g' and
+         x.nups == 2 and string.find(x.source, "^@.*db%.lua$"))
+  glob = glob+1
+  assert(debug.getinfo(1, "l").currentline == L+1)
+  assert(debug.getinfo(1, "l").currentline == L+2)
+end
+
+function foo()
+  glob = glob+1
+  assert(debug.getinfo(1, "l").currentline == L+1)
+end; foo()  -- set L
+-- check line counting"@(.-)@") == "expected"); _WARN = false
+  for i = 8, 10 do assert(s[i]) end
+
+  for i = 1, 5 do
+    local n = setmetatable({}, getmetatable(u))
+    s[n] = i
+  end
+
+  collectgarbage()
+  for i = 1, 10 do assert(s[i]) end
+
+  getmetatable(u).__gc = nil
+  warn("@normal")
+
+end
+print '+'
+
+
+-- testing userdata
+if T==nil then
+  (Message or print)('\n >>> testC not active: skipping userdata GC tests <<<\n')
+
+else
+
+  local function newproxy(u)
+    return debug.setmetatable(T.newuserdata(0), debug.getmetatable(u))
+  end
+
+  collectgarbage("stop")   -- stop collection
+  local u = newproxy(nil)
+  debug.setmetatable(u, {__gc = true})
+  local s = 0
+  local a = {[u] = 0}; setmetatable(a, {__mode = 'vk'})
+  for i=1,10 do a[newproxy(u)] = i end
+  for k in pairs(a) do assert(getmetatable(k) == getmetatable(u)) end
+  local a1 = {}; for k,v in pairs(a) do a1[k] = v end
+  for k,v in pairs(a1) do a[v] = k end
+  for i =1,10 do assert(a[i]) end
+  getmetatable(u).a = a1
+  getmetatable(u).u = u
+  do
+    local u = u
+    getmetatable(u).__gc = function (o)
+      assert(a[o] == 10-s)
+      assert(a[10-s] == undef) -- udata already removed from weak table
+      assert(getmetatable(o) == getmetatable(u))
+    assert(getmetatable(o).a[o] == 10-s)
+      s=s+1
+    end
+  end
+  a1, u = nil
+  assert(next(a) ~= nil)
+  collectgarbage()
+  assert(s==11)
+  collectgarbage()
+  assert(next(a) == nil)  -- finalized keys are removed in two cycles
+end
+
+
+-- __gc x weak tables
+local u = setmetatable({}, {__gc = true})
+-- __gc metamethod should be collected before running
+setmetatable(getmetatable(u), {__mode = "v"})
+getmetatable(u).__gc = function (o) os.exit(1) end  -- cannot happen
+u = nil
+collectgarbage()
+
+local u = setmetatable({}, {__gc = true})
+local m = getmetatable(u)
+m.x = {[{0}] = 1; [0] = {1}}; setmetatable(m.x, {__mode = "kv"});
+m.__gc = function (o)
+  assert(next(getmetatable(o).x) == nil)
+  m = 10
+end
+u, m = nil
+collectgarbage()
+assert(m==10)
+
+do   -- tests for string keys in weak tables
+  collectgarbage(); collectgarbage()
+  local m = collectgarbage("count")         -- current memory
+  local a = setmetatable({}, {__mode = "kv"})
+  a[string.rep("a", 2^22)] = 25   -- long string key -> number value
+  a[string.rep("b", 2^22)] = {}   -- long string key -> colectable value
+  a[{}] = 14                     -- colectable key
+  collectgarbage()
+  local k, v = next(a)   -- string key with number value preserved
+  assert(k == string.rep("a", 2^22) and v == 25)
+  assert(next(a, k) == nil)  -- everything else cleared
+  assert(a[string.rep("b", 2^22)] == undef)
+  a[k] = undef        -- erase this last entry
+  k = nil
+  collectgarbage()
+  assert(next(a) == nil)
+  -- make sure will not try to compare with dead key
+  assert(a[string.rep("b", 100)] == undef)
+  assert(collectgarbage("count") <= m + 1)   -- eveything collected
+end
+
+
+-- errors during collection
+if T then
+  warn("@store")
+  u = setmetatable({}, {__gc = function () error "@expected error" end})
+  u = nil
+  collectgarbage()
+  assert(string.find(_WARN, "@expected error")); _WARN = false
+  warn("@normal")
+end
+
+
+if not _soft then
+  print("long list")
+  local a = {}
+  for i = 1,200000 do
+    a = {next = a}
+  end
+  a = nil
+  collectgarbage()
+end
+
+-- create many threads with self-references and open upvalues
+print("self-referenced threads")
+local thread_id = 0
+local threads = {}
+
+local function fn (thread)
+    local x = {}
+    threads[thread_id] = function()
+                             thread = x
+                         end
+    coroutine.yield()
+end
+
+while thread_id < 1000 do
+    local thread = coroutine.create(fn)
+    coroutine.resume(thread, thread)
+    thread_id = thread_id + 1
+end
+
+
+-- Create a closure (function inside 'f') with an upvalue ('param') that
+-- points (through a table) to the closure itself and to the thread
+-- ('co' and the initial value of 'param') where closure is running.
+-- Then, assert that table (and therefore everything else) will be
+-- collected.
+do
+  local collected = false   -- to detect collection
+  collectgarbage(); collectgarbage("stop")
+  do
+    local function f (param)
+      ;(function ()
+        assert(type(f) == 'function' and type(param) == 'thread')
+        param = {param, f}
+        setmetatable(param, {__gc = function () collected = true end})
+        coroutine.yield(100)
+      end)()
+    end
+    local co = coroutine.create(f)
+    assert(coroutine.resume(co, co))
+  end
+  -- Now, thread and closure are not reacheable any more.
+  collectgarbage()
+  assert(collected)
+  collectgarbage("restart")
+end
+
+
+do
+  collectgarbage()
+  collectgarbage"stop"
+  collectgarbage("step")   -- steps should not unblock the collector
+  local x = gcinfo()
+  repeat
+    for i=1,1000 do _ENV.a = {} end   -- no collection during the loop
+  until gcinfo() > 2 * x
+  collectgarbage"restart"
+  _ENV.a = nil
+end
+
+
+if T then   -- tests for weird cases collecting upvalues
+
+  local function foo ()
+    local a = {x = 20}
+    coroutine.yield(function () return a.x end)  -- will run collector
+    assert(a.x == 20)   -- 'a' is 'ok'
+    a = {x = 30}   -- create a new object
+    assert(T.gccolor(a) == "white")   -- of course it is new...
+    coroutine.yield(100)   -- 'a' is still local to this thread
+  end
+
+  local t = setmetatable({}, {__mode = "kv"})
+  collectgarbage(); collectgarbage('stop')
+  -- create coroutine in a weak table, so it will never be marked
+  t.co = coroutine.wrap(foo)
+  local f = t.co()   -- create function to access local 'a'
+  T.gcstate("enteratomic")   -- ensure all objects are traversed
+  assert(T.gcstate() == "enteratomic")
+  assert(t.co() == 100)   -- resume coroutine, creating new table for 'a'
+  assert(T.gccolor(t.co) == "white")  -- thread was not traversed
+  T.gcstate("pause")   -- collect thread, but should mark 'a' before that
+  assert(t.co == nil and f() == 30)   -- ensure correct access to 'a'
+
+  collectgarbage("restart")
+
+  -- test barrier in sweep phase (backing userdata to gray)
+  local u = T.newuserdata(0, 1)   -- create a userdata
+  collectgarbage()
+  collectgarbage"stop"
+  local a = {}     -- avoid 'u' as first element in 'allgc'
+  T.gcstate"enteratomic"
+  T.gcstate"sweepallgc"
+  local x = {}
+  assert(T.gccolor(u) == "black")   -- userdata is "old" (black)
+  assert(T.gccolor(x) == "white")   -- table is "new" (white)
+  debug.setuservalue(u, x)          -- trigger barrier
+  assert(T.gccolor(u) == "gray")   -- userdata changed back to gray
+  collectgarbage"restart"
+
+  print"+"
+end
+
+
+if T then
+  local debug = require "debug"
+  collectgarbage("stop")
+  local x = T.newuserdata(0)
+  local y = T.newuserdata(0)
+  debug.setmetatable(y, {__gc = nop})   -- bless the new udata before...
+  debug.setmetatable(x, {__gc = nop})   -- ...the old one
+  assert(T.gccolor(y) == "white")
+  T.checkmemory()
+  collectgarbage("restart")
+end
+
+
+if T then
+  print("emergency collections")
+  collectgarbage()
+  collectgarbage()
+  T.totalmem(T.totalmem() + 200)
+  for i=1,200 do local a = {} end
+  T.totalmem(0)
+  collectgarbage()
+  local t = T.totalmem("table")
+  local a = {{}, {}, {}}   -- create 4 new tables
+  assert(T.totalmem("table") == t + 4)
+  t = T.totalmem("function")
+  a = function () end   ÿ- create 1 new closure
+  assert(T.totalmem("function") == t + 1)
+  t = T.totalmem("thread")
+  a = coroutine.create(function () end)   -- create 1 new coroutine
+  assert(T.totalmem("thread") == t + 1)
+end
+
+
+-- create an object to be collected when state is closed
+do
+  local setmetatable,assert,type,print,getmetatable =
+        setmetatable,assert,type,print,getmetatable
+  local tt = {}
+  tt.__gc = function (o)
+    assert(getmetatable(o) == tt)
+    -- create new objects during GC
+    local a = 'xuxu'..(10+3)..'joao', {}
+    ___Glob = o  -- ressurrect object!
+    setmetatable({}, tt)  -- creates a new one with same metatable
+    print(">>> closing state " .. "<<<\n")
+  end
+  local u = setmetatable({}, tt)
+  ___Glob = {u}   -- avoid object being collected before program end
+end
+
+-- create several objects to raise errors when collected while closing state
+if T then
+  local error, assert, find, warn = error, assert, string.find, warn
+  local n = 0
+  local lastmsg
+  local mt = {__gc = function (o)
+    n = n + 1
+    assert(n == o[1])
+    if n == 1 then
+      _WARN = false
+    elseif n == 2 then
+      assert(find(_WARN, "@expected warning"))
+      lastmsg = _WARN    -- get message from previous error (first 'o')
+    else
+      assert(lastmsg == _WARN)  -- subsequent error messages are equal
+    end
+    warn("@store"); _WARN = false
+    error"@expected warning"
+  end}
+  for i = 10, 1, -1 do
+    -- create object and preserve it until the end
+    table.insert(___Glob, setmetatable({i}, mt))
+  end
+end
+
+-- just to make sure
+assert(collectgarbage'isrunning')
+
+do    -- check that the collector is not reentrant in incremental mode
+  local res = true
+  setmetatable({}, {__gc = function ()
+    res = collectgarbage()
+  end})
+  collectgarbage()
+  assert(not res)
+end
+
+
+collectgarbage(oldmode)
+
+print('OK')
+local step = maxi // 10
+  local c = mini
+  for i = mini, maxi, step do
+    assert(i == c)
+    c = c + step
+  end
+
+  c = maxi
+  for i = maxi, mini, -step do
+    assert(i == c)
+    c = c - step
+  end
+
+  checkfor(maxi, maxi, maxi, {maxi})
+  checkfor(maxi, maxi, mini, {maxi})
+  checkfor(mini, mini, maxi, {mini})
+  checkfor(mini, mini, mini, {mini})
+end
+
+
+checkerror("'for' step is zero", function ()
+  for i = 1, 10, 0 do end
+end)
+
+checkerror("'for' step is zero", function ()
+  for i = 1, -10, 0 do end
+end)
+
+checkerror("'for' step is zero", function ()
+  for i = 1.0, -10, 0.0 do end
+end)
+
+collectgarbage()
+
+
+-- testing generic 'for'
+
+local function f (n, p)
+  local t = {}; for i=1,p do t[i] = i*10 end
+  return function (_, n, ...)
+           assert(select("#", ...) == 0)  -- no extra arguments
+           if n > 0 then
+             n = n-1
+             return n, table.unpack(t)
+           end
+         end, nil, n
+end
+
+local x = 0
+for n,a,b,c,d in f(5,3) do
+  x = x+1
+  assert(a == 10 and b == 20 and c == 30 and d == nil)
+end
+assert(x == 5)
+
+
+
+-- testing __pairs and __ipairs metamethod
+a = {}
+do
+  local x,y,z = pairs(a)
+  assert(type(x) == 'function' and y == a and z == nil)
+end
+
+local function foo (e,i)
+  assert(e == a)
+  if i <= 10 then return i+1, i+2 end
+end
+
+local function foo1 (e,i)
+  i = i + 1
+  assert(e == a)
+  if i <= e.n then return i,a[i] end
+end
+
+setmetatable(a, {__pairs = function (x) return foo, x, 0 end})
+
+local i = 0
+for k,v in pairs(a) do
+  i = i + 1
+  assert(k == i and v == k+1)
+end
+
+a.n = 5
+a[3] = 30
+
+-- testing ipairs with metamethods
+a = {n=10}
+setmetatable(a, { __index = function (t,k)
+                     if k <= t.n then return k * 10 end
+                  end})
+i = 0
+for k,v in ipairs(a) do
+  i = i + 1
+  assert(k == i and v == i * 10)
+end
+assert(i == a.n)
+
+
+-- testing yield inside __pairs
+do
+  local t = setmetatable({10, 20, 30}, {__pairs = function (t)
+    local inc = coroutine.yield()
+    return function (t, i)
+             if i > 1 then return i - inc, t[i - inc]  else return nil end
+           end, t, #t + 1
+  end})
+
+  local res = {}
+  local co = coroutine.wrap(function ()
+    for i,p in pairs(t) do res[#res + 1] = p end
+  end)
+
+  co()     -- start coroutine
+  co(1)    -- continue after yield
+  assert(res[1] == 30 and res[2] == 20 and res[3] == 10 and #res == 3)
+  
+end
+
+print"OK"
+== 0 then error(i)
+  else coroutine.yield(); f(i-1)
+  end
+end
+
+
+co = coroutine.create(function (x) f(x) end)
+a, b = coroutine.resume(co, 3)
+t = {"'coroutine.yield'", "'f'", "in function <"}
+while coroutine.status(co) == "suspended" do
+  checktraceback(co, t)
+  a, b = coroutine.resume(co)
+  table.insert(t, 2, "'f'")   -- one more recursive call to 'f'
+end
+t[1] = "'error'"
+checktraceback(co, t)
+
+
+-- test acessing line numbers of a coroutine from a resume inside
+-- a C function (this is a known bug in Lua 5.0)
+
+local function g(x)
+    coroutine.yield(x)
+end
+
+local function f (i)
+  debug.sethook(function () end, "l")
+  for j=1,1000 do
+    g(i+j)
+  end
+end
+
+local co = coroutine.wrap(f)
+co(10)
+pcall(co)
+pcall(co)
+
+
+assert(type(debug.getregistry()) == "table")
+
+
+-- test tagmethod information
+local a = {}
+local function f (t)
+  local info = debug.getinfo(1);
+  assert(info.namewhat == "metamethod")
+  a.op = info.name
+  return info.name
+end
+setmetatable(a, {
+  __index = f; __add = f; __div = f; __mod = f; __concat = f; __pow = f;
+  __mul = f; __idiv = f; __unm = f; __len = f; __sub = f;
+  __shl = f; __shr = f; __bor = f; __bxor = f;
+  __eq = f; __le = f; __lt = f; __unm = f; __len = f; __band = f;
+  __bnot = f;
+})
+
+local b = setmetatable({}, getmetatable(a))
+
+assert(a[3] == "index" and a^3 == "pow" and a..a == "concat")
+assert(a/3 == "div" and 3%a == "mod")
+assert(a+3 == "add" and 3-a == "sub" and a*3 == "mul" and
+       -a == "unm" and #a == "len" and a&3 == "band")
+assert(a + 30000 == "add" and a - 3.0 == "sub" and a * 3.0 == "mul" and
+       -a == "unm" and #a == "len" and a & 3 == "band")
+assert(a|3 == "bor" and 3~a == "bxor" and a<<3 == "shl" and a>>1 == "shr")
+assert (a==b and a.op == "eq")
+assert (a>=b and a.op == "le")
+assert ("x">=a and a.op == "le")
+assert (a>b and a.op == "lt")
+assert (a>10 and a.op == "lt")
+assert(~a == "bnot")
+
+do   -- testing for-iterator name
+  local function f()
+    assert(debug.getinfo(1).name == "for iterator")
+  end
+
+  for i in f do end
+end
+
+
+do   -- testing debug info for finalizers
+  local name = nil
+
+  -- create a piece of garbage with a finalizer
+  setmetatable({}, {__gc = function ()
+    local t = debug.getinfo(1)   -- get function information
+    assert(t.namewhat == "metamethod")
+    name = t.name
+  end})
+
+  -- repeat until previous finalizer runs (setting 'name')
+  repeat local a = {} until name
+  assert(name == "__gc")
+end
+
+
+do
+  print("testing traceback sizes")
+
+  local function countlines (s)
+    return select(2, string.gsub(s, "\n", ""))
+  end
+
+  local function deep (lvl, n)
+    if lvl == 0 then
+      return (debug.traceback("message", n))
+    else
+      return (deep(lvl-1, n))
+    end
+  end
+
+  local function checkdeep (total, start)
+    local s = deep(total, start)
+    local rest = string.match(s, "^message\nstack traceback:\n(.*)$")
+    local cl = countlines(rest)
+    -- at most 10 lines in first part, 11 in second, plus '...'
+    assert(cl <= 10 + 11 + 1)
+    local brk = string.find(rest, "%.%.%.\t%(skip")
+    if brk then   -- does message have '...'?
+      local rest1 = string.sub(rest, 1, brk)
+      local rest2 = string.sub(rest, brk, #rest)
+      assert(countlines(rest1) == 10 and countlines(rest2) == 11)
+    else
+      assert(cl == total - start + 2)
+    end
+  end
+
+  for d = 1, 51, 10 do
+    for l = 1, d do
+      -- use coroutines to ensure complete control of the stack
+      coroutine.wrap(checkdeep)(d, l)
+    end
+  end
+
+end
+
+
+print("testing debug functions on chunk without debug info")
+local prog = [[-- program to be loaded without debug information (strip)
+local debug = require'debug'
+local a = 12  -- a local variable
+
+local n, v = debug.getlocal(1, 1)
+assert(n == "(temporary)" and v == debug)   -- unkown name but known value
+n, v = debug.getlocal(1, 2)
+assert(n == "(temporary)" and v == 12)   -- unkown name but known value
+
+-- a function with an upvalue
+local f = function () local x; return a end
+n, v = debug.getupvalue(f, 1)
+assert(n == "(no name)" and v == 12)
+assert(debug.setupvalue(f, 1, 13) == "(no name)")
+assert(a == 13)
+
+local t = debug.getinfo(f)
+assert(t.name == nil and t.linedefined > 0 and
+       t.lastlinedefined == t.linedefined and
+       t.short_src == "?")
+assert(debug.getinfo(1).currentline == -1)
+
+t = debug.getinfo(f, "L").activelines
+assert(next(t) == nil)    -- active lines are empty
+
+-- dump/load a function without debug info
+f = load(string.dump(f))
+
+t = debug.getinfo(f)
+assert(t.name == nil and t.linedefined > 0 and
+       t.lastlinedefined == t.linedefined and
+       t.short_src == "?")
+assert(debug.getinfo(1).currentline == -1)
+
+return a
+]]
+
+
+-- load 'prog' without debug info
+local f = assert(load(string.dump(load(prog), true)))
+
+assert(f() == 13)
+
+do   -- bug in 5.4.0: line hooks in stripped code
+  local function foo ()
+    local a = 1
+    local b = 2
+    return b
+  end
+
+  local s = load(string.dump(foo, true))
+  local line = true
+  debug.sethook(function (e, l)
+    assert(e == "line")
+    line = l
+  end, "l")
+  assert(s() == 2); debug.sethook(nil)
+  assert(line == nil)  -- hook called withoug debug info for 1st instruction
+end
+
+do   -- tests for 'source' in binary dumps
+  local prog = [[
+    return function (x)
+      return function (y) 
+        return x + y
+      end
+    end
+  ]]
+  local name = string.rep("x", 1000)
+  local p = assert(load(prog, name))
+  -- load 'p' as a binary chunk with debug information
+  local c = string.dump(p)
+  assert(#c > 1000 and #c < 2000)   -- no repetition of 'source' in dump
+  local f = assert(load(c))
+  local g = f()
+  local h = g(3)
+  assert(h(5) == 8)
+  assert(debug.getinfo(f).source == name and   -- all functions have 'source'
+         debug.getinfo(g).source == name and 
+         debug.getinfo(h).source == name)
+  -- again, without debug info
+  local c = string.dump(p, true)
+  assert(#c < 500)   -- no 'source' in dump
+  local f = assert(load(c))
+  local g = f()
+  local h = g(30)
+  assert(h(50) == 80)
+  assert(debug.getinfo(f).source == '=?' and   -- no function has 'source'
+         debug.getinfo(g).source == '=?' and 
+         debug.getinfo(h).source == '=?')
+end
+
+print"OK"
+

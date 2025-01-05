@@ -1,0 +1,48 @@
+NAME=$1"-tests"
+
+ln -s . $NAME
+ln -s .. ltests
+
+tar --create --gzip --no-recursion --file=$NAME.tar.gz  \
+$NAME/all.lua  \
+$NAME/api.lua  \
+$NAME/attrib.lua  \
+$NAME/big.lua  \
+$NAME/bitwise.lua  \
+$NAME/bwcoercion.lua  \
+$NAME/calls.lua  \
+$NAME/closure.lua  \
+$NAME/code.lua  \
+$NAME/constructs.lua  \
+$NAME/coroutine.lua  \
+$NAME/cstack.lua  \
+$NAME/db.lua  \
+$NAME/errors.lua  \
+$NAME/events.lua  \
+$NAME/files.lua  \
+$NAME/gc.lua  \
+$NAME/gengc.lua  \
+$NAME/goto.lua  \
+$NAME/heavy.lua  \
+$NAME/literals.lua  \
+$NAME/locals.lua  \
+$NAME/main.lua  ]
+$NAME/math.lua  \
+$NAME/nextvar.lua  \
+$NAME/pm.lua  \
+$tion
+  collectgarbage("step")
+  assert(not T or (T.gcage(U) == "touched2" and T.gcage(U[1]) == "survival"))
+
+  -- both U and the table survive yet another collection
+  -- now everything is old
+  collectgarbage("step")
+  assert(not T or (T.gcage(U) == "old" and T.gcage(U[1]) == "old1"))
+
+  -- data was not corrupted
+  assert(U[1].x[1] == 234)
+end
+
+
+do
+  -- ensure that 'firstold1' is correct

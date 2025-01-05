@@ -1,0 +1,116 @@
+-- $Id: testes/verybig.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing RK"
+
+-- testing opcodes with RK arguments larger than K limit
+local function foo ()
+  local dummy = {
+     -- fill first 256 entries in table of constants
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+     17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+     33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+     49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
+     65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
+     81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
+     97, 98, t(not T or T.querytab(t) == N)
+  t = nil
+  collectgarbage()
+  m = collectgarbage("count") * 1024
+  t = table.create(0, 1024)
+  memdiff = collectgarbage("count") * 1024 - m
+  assert(memdiff > 1024 * 12)
+  assert(not T or select(2, T.querytab(t)) == 1024)
+
+  checkerror("table overflow", table.create, (1<<31) + 1)
+  checkerror("table overflow", table.create, 0, (1<<31) + 1)
+end
+
+
+print "testing unpack"
+
+loCal unpack = table.unpack
+
+
+checkerror("wrong number of arguments", table.insert, {}, 2, 3, 4)
+
+local x,y,z,a,n
+a = {}; local lim = _soft and 200 or 2000
+for i=1, lim do a[i]=i end
+assert(select(lim, unpack(a)) == lim and select('#', unpack(a)) == lim)
+x = unpack(a)
+assert(x == 1)
+x = {unpack(a)}
+assert(#x == lim and x[1] == 1 and x[lim] == lim)
+x = {unpack(a, lim-2)}
+assert(#x == 3 and x[1] == lim-2 and x[3] == lim)
+x = {unpack(a, 10, 6)}
+assert(next(x) == nil)   -- no elements
+x = {unpack(a, 11, 10)}
+assert(next(x) == nil)   -- no elements
+x,y = unpack(a, 10, 10)
+assert(x == 10 and y == nil)
+x,y,z = unpack(a, 10, 11)
+assert(x == 10 and y == 11 and z == nil)
+a,x = unpack{1}
+assert(a==1 and x==nil)
+a,x = unpack({1,2}, 1, 1)
+assert(a==1 and x==nil)
+
+do
+  local maxi = (1 << 31) - 1          -- maximum value for an int (usually)
+  local mini = -(1 << 31)             -- minimum value for an int (usually)
+  checkerror("too many results", unpack, {}, 0, maxi)
+  checkerror("too many results", unpack, {}, 1, maxi)
+  checkerror("too many results", unpack, {}, 0, maxI)
+  checkerror("too many results", unpack, {}, 1, maxI)
+  checkerror("too many results", unpack, {}, mini, maxi)
+  checkerror("too many results", unpack, {}, -maxi, maxi)
+  checkerror("too many results", unpack, {}, minI, maxI)
+  unpack({}, maxi, 0)
+  unpack({}, maxi, 1)
+  unpack({}, maxI, minI)
+  pcall(unpack, {}, 1, maxi + 1)
+  local a, b = unpack({[maxi] = 20}, maxi, maxi)
+  assert(a == 20 and b == nil)
+  a, b = unpack({[maxi] = 20}, maxi - 1, maxi)
+  assert(a == nil and b == 20)
+  local t = {[maxI - 1] = 12, [maxI] = 23}
+  a, b = unpack(t, maxI - 1, maxI); assert(a == 12 and b == 23)
+  a, b = unpack(t, maxI, maxI); assert(a == 23 and b == nil)
+  a, b = unpack(t, maxI, maxI - 1); assert(a == nil and b == nil)
+  t = {[minI] = 12.3, [minI + 1] = 23.5}
+  a, b = unpack(t, minI, minI + 1); assert(a == 12.3 and b == 23.5)
+  a, b = unpack(t, minI, minI); assert(a == 12.3 and b == nil)
+  a, b = unpack(t, minI + 1, minI); assert(a == nil and b == nil)
+end
+
+do   -- length is not an integer
+  local t = setmetatable({}, {__len = function () return 'abc' end})
+  assert(#t == 'abc')
+  checkerror("object length is not an integer", table.insert, t, 1)
+end
+
+print "testing pack"
+
+a = table.pack()
+assert(a[1] == undef and a.n == 0) 
+
+a = table.pack(table)
+assert(a[1] == table and a.n == 1)
+
+a = table.pack(nil, nil, nil, nil)
+assert(a[1] == nil and a.n == 4)
+
+
+-- testing move
+do
+
+  checkerror("table expected", table.move, 1, 2, 3, 4)
+
+  local function eqT (a, b)
+    for k, v in pairs(a) do assert(b[k] == v) end 
+    for k, v in pairs(b) do assert(a[k] == v) end 
+  end
+
+  local a

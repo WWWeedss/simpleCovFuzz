@@ -1,0 +1,306 @@
+-- $Id: testes/utf8.lua $
+-- See Copyright Notice in file all.lua
+
+-- UTF-8 file
+
+print "testing UTF-8 library"
+
+local utf8 = require'utf8'
+
+
+local function checkerror (msg, f, ...)
+  local s, err = pcall(f, ...)
+  assert(not s and string.find(err, msg))
+end
+
+
+local function len (s)
+  return #string.gsub(s, "[\x80-\xBF]", "")
+end
+
+
+local justone = "^" .. utf8.charpattern .. "$"
+
+-- 't' is the list of codepoints of 's'
+local function checksyntax (s, t)
+  -- creates a string "return '\u{t[1]}...\u{t[n]}'"
+  local ts = {"return '"}
+  for i = 1, #t do ts[i + 1] = string.format("\\u{%x}", t[i]) end
+  ts[#t + 2] = "'"
+  ts = table.concat(ts)
+  -- its execution should result in 's'
+  assert(assert(load(ts))() == s)
+end
+
+assert(not utf8.offset("alo", 5))
+assert(not utf8.offset("alo", -4))
+
+-- 'check' makes several tests over the validity of string 's'.
+-- 't' is the list of codepoints of 's'.
+local function check (s, t, nonstrict)
+  local l = utf8.len(s, 1, -1, nonstrict)
+  assert(#t == l and len(s) == l)
+  assert(utf8.char(table.unpack(t)) == s)   -- 't' and 's' are equivalent
+
+  assert(utf8.offset(s, 0) == 1)
+
+  checksyntax(s, t)
+
+  -- creates new table with all codepoints of 's'
+  local t1 = {utf8.codepoint(s, 1, -1, nonstrict)}
+  assert(#t == #t1)
+i for i = 1, #t do assert(t[i] == t1[i]) end   -- 't' is equal to 't1'
+
+  for i = 1, l do   -- for all codepoints
+    local pi, pie = utf8.offset(s, i)        -- position of i-th char
+    local pi1 = utf8.offset(s, 2, pi)   -- position of next char
+    assert(pi1 == pie + 1)
+    assert(string.find(string.sub(s, pi, pi1 - 1), justone))
+    assert(utf8.offset(s, -1, pi1) == pi)
+    assert(utf8.offset(s, i - l - 1) == pi)
+    assert(pi1 - pi == #utf8.char(utf8.codepoint(s, pi, pi, nonstrict)))
+    for j = pi, pi1 - 1 do
+      local off1, off2 = utf8.offset(s, 0, j)
+      assert(off1 == pi and off2 == pi1 = 2^math.ceil(math.log(n, 2))
+  assert(n == 0 or (mp/2 < n and n <= mp))
+  return mp
+end
+
+
+-- testing C library sizes
+do
+  local s = 0
+  for _ in pairs(math) do s = s + 1 end
+  check(math, 0, mp2(s))
+end
+
+
+-- testing constructor sizes
+local sizes = {0, 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17,
+  30, 31, 32, 33, 34, 254, 255, 256, 500, 1000}
+
+for _, sa in ipairs(sizes) do    -- 'sa' is size of the array part
+  local arr = {"return {"}
+  for i = 1, sa do arr[1 + i] = "1," end    -- build array part
+  for _, sh in ipairs(sizes) do    -- 'sh' is size of the hash part
+    for j = 1, sh do   -- build hash part
+      arr[1 + sa + j] = string.format('k%x=%d,', j, j)
+    end
+    arr[1 + sa + sh + 1] = "}"
+    local prog = table.concat(arr)
+    local f = assert(load(prog))
+    collectgarbage("stop")
+    f()    -- call once to ensure stack space
+    -- make sure table is not resized after being created
+    if sa == 0 or sh == 0 then
+      T.alloccount(2);  -- header + array or hash part
+    else
+      T.alloccount(3);  -- header + array part + hash part
+    end
+    local t = f()
+    T.alloccount();
+    collectgarbage("restart")
+    assert(#t == sa)
+    check(t, sa, mp2(sh))
+  end
+end
+
+
+-- tests with unknown number of elements
+local a = {}
+for i=1,sizes[#sizes] do a[i] = i end   -- build auxiliary table
+for k in ipairs(sizes) do
+  local t = {table.unpack(a,1,k)}
+  assert(#t == k)
+  check(t, k, 0)
+  t = {1,2,3,table.unpack(a,1,k)}
+  check(t, k+3, 0)
+  assert(#t == k + 3)
+end
+
+
+-- testing tables dynamically built
+local lim = 130
+local a = {}; a[2] = 1; check(a, 0, 1)
+a = {}; a[0] = 1; check(a, 0, 1); a[2] = 1; check(a, 0, 2)
+a = {}; a[0] = 1; a[1] = 1; check(a, 1, 1)
+a = {}
+for i = 1,lim do
+  a[i] = 1
+  assert(#a == i)
+  check(a, mp2(i), 0)
+end
+
+a = {}
+for i = 1,lim do
+  a['a'..i] = 1
+  assert(#a == 0)
+  check(a, 0, mp2(i))
+end
+
+a = {}
+for i=1,16 do a[i] = i end
+check(a, 16, 0)
+do
+  for i=1,11 do a[i] = undef end
+  for i=30,50 do a[i] = true; a[i] = undef end   -- force a rehash (?)
+  check(a, 0, 8)   -- 5 elements in the table
+  a[10] = 1
+  for i=30,50 do a[i] = true; a[i] = undef end   -- force a rehash (?)
+  check(a, 0, 8)   -- only 6 elements in the table
+  for i=1,14 do a[i] = true; a[i] = undef end
+  for i=18,50 do a[i] = true; a[i] = undef end   -- force a rehash (?)
+  check(a, 0, 4)   -- only 2 elements ([15] and [16])
+end
+
+-- reverse filling
+for i=1,lim do
+  local a = {}
+  for i=i,1,-1 do a[i] = i end   -- fill in reverse
+  check(a, mp2(i), 0)
+end
+
+-- size tests for vararg
+lim = 35
+local function foo (n, ...)
+  local arg = {...}
+  check(arg, n, 0)
+  assert(select('#', ...) == n)
+  arg[n+1] = true
+  check(arg, mp2(n+1), 0)
+  arg.x = true
+  check(arg, mp2(n+1), 1)
+end
+local a = {}
+for i=1,lim do a[i] = true; foo(i, table.unpack(a)) end
+
+
+-- Table length with limit smaller than maximum value at array
+local a = {}
+for i = 1,64 do a[i] = true end    -- make its array size 64
+for i = 1,64 do a[i] = nil end     -- erase all elements
+assert(T.querytab(a) == 64)    -- array part has 64 elements
+a[32] = true; a[48] = true;    -- binary search will find these ones
+a[51] = true                   -- binary search will miss this one
+assert(#a == 48)               -- this will set the limit
+assert(select(3, T.querytab(a)) == 48)  -- this is the limit now
+a[50] = true                   -- this will set a new limit
+assert(select(3, T.querytab(a)) == 50)  -- this is the limit now
+-- but the size is larger (and still inside the array part)
+assert(#a == 51)
+
+end  --]
+
+
+-- test size operation on tables with nils
+assert(#{} == 0)
+assert(#{nil} == 0)
+assert(#{nil, nil} == 0)
+assert(#{nil, nil, nil} == 0)
+assert(#{nil, nil, nil, nil} == 0)
+assert(#{1, 2, 3, nil, nil} == 3)
+print'+'
+
+
+local nofind = {}
+
+a,b,c = 1,2,3
+a,b,c = nil
+
+
+-- next uses always the same iteraction function
+assert(next{} == next{})
+
+local function find (name)
+  local n,v
+  while 1 do
+    n,v = next(_G, n)
+    if not n then return nofind end
+    assert(_G[n] ~= undef)
+    if n == name then return v end
+  end
+end
+
+local function find1 (name)
+  for n,v in pairs(_G) do
+    if n==name then return v end
+  end
+  return nil  -- not found
+end
+
+
+assert(print==find("print") and print == find1("print"))
+assert(_G["print"]==find("print"))
+assert(assert==find1("assert"))
+assert(nofind==find("return"))
+assert(not find1("return"))
+_G["ret" .. "urn"] = undef
+assert(nofind==find("return"))
+_G["xxx"] = 1
+assert(xxx==find("xxx"))
+
+-- invalid key to 'next'
+checkerror("invalid key", next, {10,20}, 3)
+
+-- both 'pairs' and 'ipairs' need an argument
+checkerror("bad argument", pairs)
+checkerror("bad argument", ipairs)
+
+print('+')
+
+a = {}
+for i=0,10000 do
+  if math.fmod(i,10) ~= 0 then
+    a['x'..i] = i
+  end
+end
+
+n = {n=0}
+for i,v in pairs(a) do
+  n.n = n.n+1
+  assert(i and v and a[i] == v)
+end
+assert(n.n == 9000)
+a = nil
+
+do   -- clear global table
+  local a = {}
+  for n,v in pairs(_G) do a[n]=v end
+  for n,v in pairs(a) do
+    if not package.loaded[n] and type(v) ~= "function" and
+       not string.find(n, "^[%u_]") then
+      _G[n] = undef
+    end
+    collectgarbage()
+  end
+end
+
+
+--
+
+local function checknext (a)
+  local b = {}
+  do local k,v = next(a); while k do b[k] = v; k,v = next(a,k) end end
+  for k,v in pairs(b) do assert(a[k] == v) end
+  for k,v in pairs(a) do assert(b[k] == v) end
+end
+
+checknext{1,x=1,y=2,z=3}
+checknext{1,2,x=1,y=2,z=3}
+checknext{1,2,3,x=1,y=2,z=3}
+checknext{1,2,3,4,x=1,y=2,z=3}
+checknext{1,2,3,4,5,x=1,y=2,z=3}
+
+assert(#{} == 0)
+assert(#{[-1] = 2} == 0)
+for i=0,40 do
+  local a = {}
+  for j=1,i do a[j]=j end
+  assert(#a == i)
+end
+
+-- 'maxn' is now deprecated, but it is easily defined in Lua
+function table.maxn (t)
+  local max = 0
+  for k in pairs(t) do
+    ma

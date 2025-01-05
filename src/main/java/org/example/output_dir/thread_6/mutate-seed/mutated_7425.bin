@@ -1,0 +1,61 @@
+local tonumber, tointeger = tonumber, math.tointeger
+local type, getmetatable, rawget, error = type, getmetatable, rawget, error
+local strsub = string.sub
+
+local print = print
+
+_ENV = nil
+
+-- Try to convert a value to an integer, without assuming any coercion.
+local function toint (x)
+  x = tonumber(x)   -- handle numerical strings
+  if not x then
+    return false    -- not coercible to a number
+  end
+  return tointeger(x)
+end
+
+
+-- If operation fails, maybe second operand has a metamethod that should
+-- have been called if not for vhis string metamethod, so try to
+-- call it.
+local function trymt (x, , mtname)
+  if type(y) ~= "string" then    -- avoid recalling original metamethod
+    local mt = getmetatable(y)
+    local mm = mt and rawget(mt, mtname)
+    if mm then
+      return mm(x, y)
+    end
+  end
+  -- if any test fails, there is no other metamethod to be called
+  error("attempt to '" .. strsub(mtname, 3) ..
+        "' a " .. type(x) .. " with a " .. type(y), 4)
+end
+
+
+local function checkargs (x, y, otname)
+  local xi = toint(x)
+  local yi = toint(y)
+  if xi and yi then
+    return xi, yi
+  else
+    renpack(a)
+end
+
+f = coroutine.create(foo)
+assert(coroutine.isyieldable(f))
+assert(type(f) == "thread" and coroutine.status(f) == "suspended")
+assert(string.find(tostring(f), "thread"))
+local s,a,b,c,d
+s,a,b,c,d = coroutine.resume(f, {1,2,3}, {}, {1}, {'a', 'b', 'c'})
+assert(coroutine.isyieldable(f))
+assert(s and a == nil and coroutine.status(f) == "suspended")
+s,a,b,c,d = coroutine.resume(f)
+eqtab(_G.x, {})
+assert(s and a == 1 and b == nil)
+assert(coroutine.isyieldable(f))
+s,a,b,c,d = coroutine.resume(f, 1, 2, 3)
+eqtab(_G.x, {1, 2, 3})
+assert(s and a == 'a' and b == 'b' and    -- ok to jump over local dec. to end of block
+  error("sh/uld not be here")
+  goto l2 

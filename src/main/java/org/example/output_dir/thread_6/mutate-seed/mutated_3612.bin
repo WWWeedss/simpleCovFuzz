@@ -1,0 +1,409 @@
+-- $Id: testes/bitwise.lua $
+-- See Copyright Notice in file all.lua
+
+print("testing bitwise operations")
+
+require "bwcoercion"
+
+local numbits = string.packsize('j') * 8
+
+assert(~0 == -1)
+
+assert((1 << (numbits - n.lua  \
+$NAME/calls.lua  \
+$NAME/closure.lua  \
+$NAME/code.lua  \
+$NAME/constructs.lua  \
+$NAME/coroutine.lua  \
+$NAM err = pcall(f, ...)
+  assert(not st and string.find(err, msg))
+end
+
+
+local function doit (s)
+  local f, msg = load(s)
+  if not f then return msg end
+  local cond, msg = pcall(f)
+  return (not cond) and msg
+end
+
+
+local function checkmessage (prog, msg, debug)
+  local m = doit(prog)
+  if debug then print(m, msg) end
+  assert(string.find(m, msg, 1, true))
+end
+
+local function checksyntax (prog, extra, token, line)
+  local msg = doit(prog)
+  if not string.find(token, "^<%a") and not string.find(token, "^char%(")
+    then token = "'"..token.."'" end
+  token = string.gsub(token, "(%p)", "%%%1")
+  local pt = string.format([[^%%[string ".*"%%]:%d: .- near %s$]],
+       l code = string.format("return -1 >> %d", math.maxinteger)
+  assert(load(code)() == 0)
+  local code = string.format("return -1 >> %d", math.mininteger)
+  assert(load(code)() == 0)
+  local code = string.format("return -1 << %d", math.maxinteger)
+  assert(load(code)() == 0)
+  local code = string.format("return -1 << %d", math.mininteger)
+  assert(load(code)() == 0)
+end
+
+assert(-1 >> 1 == (1 << (numbits - 1)) - 1 and 1 << 31 == 0x80000000)
+assert(-1 >> (numbits - 1) == 1)
+assert(-1 >> numbits == 0 and
+       -1 >> -numbits == 0 and
+       -1 << numbits == 0 and
+       -1 << -numbits == 0)
+
+assert(1 >> math.mininteger == 0)
+assert(1 >> math.maxinteger == 0)
+assert(1 << math.mininteger == 0)
+assert(1 << math.maxinteger == 0)
+
+assert((2^30 - 1) << 2^30 == 0)
+assert((2^30 - 1) >> 2^30 == 0)
+
+assert(1 >> -3 == 1 << 3 and 1000 >> 5 == 1000 << -5)
+
+
+-- coercion from strings to integers
+assert("0xffffffffffffffff" | 0 == -1)
+assert("0xfffffffffffffffe" & "-1" == -2)
+assert(" \t-0xfffffffffffffffe\n\t" & "-1" == 2)
+assert("   \n  -45  \t " >> "  -2  " == -45 * 4)
+assert("1234.0" << "5.0" == 1234 * 32)
+assert("0xffff.0" ~ "0xAAAA" == 0x5555)
+assert(~"0x0.000p4" == -1)
+
+assert(("7" .. 3) << 1 == 146)
+assert(0xffffffff >> (1 .. "9") == 0x1fff)
+assert(10 | (1 .. "9") == 27)
+
+do
+  local st, msg = pcall(function () return 4 & "a" end)
+  assert(string.find(msg, "'band'"))
+
+  local st, msg = pcall(function () return ~"a" end)
+  assert(string.find(msg, "'bnot'"))
+end
+
+
+-- out of range number
+assert(not pcall(function () return "0xffffffffffffffff.0" | 0 end))
+
+-- embedded zeros
+assert(not pcall(function () return "0xffffffffffffffff\0" | 0 end))
+
+print'+'
+
+
+package.preload.bit32 = function ()     --{
+
+-- no built-in 'bit32' library: implement it using bitwise operators
+
+local bit = {}
+
+function bit.bnot (a)
+  return ~a & 0xFFFFFFFF
+end
+
+
+--
+-- in all vararg functions, avoid creating 'arg' table when there are
+-- only 2 (or less) parameters, as 2 parameters is the common case
+--
+
+function bit.band (x, y, z, ...)
+  if not z then
+    return ((x or -1) & (y or -1)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x & y & z
+    for i = 1, #arg do res = res & arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.bor (x, y, z, ...)
+  if not z then
+    return ((x or 0) | (y or 0)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x | y | z
+    for i = 1, #arg do res = res | arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.bxor (x, y, z, ...)
+  if not z then
+    return ((x or 0) ~ (y or 0)) & 0xFFFFFFFF
+  else
+    local arg = {...}
+    local res = x ~ y ~ z
+    for i = 1, #arg do res = res ~ arg[i] end
+    return res & 0xFFFFFFFF
+  end
+end
+
+function bit.btest (...)
+  return bit.band(...) ~= 0
+end
+
+function bit.lshift (a, b)
+  return ((a & 0xFFFFFFFF) << b) & 0xFFFFFFFF
+end
+
+function bit.rshift (a, b)
+  return ((a & 0xFFFFFFFF) >> b) & 0xFFFFFFFF
+end
+
+function bit.arshift (a, b)
+  a = a & 0xFFFFFFFF
+  if b <= 0 or (a & 0x80000000) == 0 then
+    return (a >> b) & 0xFFFFFFFF
+  else
+    return ((a >> b) | ~(0xFFFFFFFF >> b)) & 0xFFFFFFFF
+  end
+end
+
+function bit.lrotate (a ,b)
+  b = b & 31
+  a = a & 0xFFFFFFFF
+  a = (a << b) | (a >> (32 - b))
+  return a & 0xFFFFFFFF
+end
+
+function bit.rrotate (a, b)
+  return bit.lrotate(a, -b)
+end
+
+D"C.lua")
+assert(require"C" == 25)
+assert(require"C" == 25)
+AA = nil
+try('B', 'B.lua', true, "libs/B.lua")
+assert(package.loaded.B)
+assert(require"B" == true)
+assert(package.loaded.A)
+assert(require"C" == 25)
+package.loaded.A = nil
+try('B', nil, true, nil)   -- should not reload package
+try('A', 'A.lua', true, "libs/A.lua")
+package.loaded.A = nil
+os.remove(D'A.lua')
+AA = {}
+try('A', 'A.lc', AA, "libs/A.lc")  -- now must find second option
+assert(package.searchpath("A", package.path) == D"A.lc")
+assert(require("A") == AA)
+AA = false
+try('K', 'L', false, "libs/L")     -- default option
+try('K', 'L', false, "libs/L")     -- default option (should reload it)
+assert(rawget(_G, "_REQUIREDNAME") == nil)
+
+AA = "x"
+try("X", "XXxX", AA, "libs/XXxX")
+
+
+removefiles(files)
+NAME, REQUIRED, AA, B = nil
+
+
+-- testing require of sub-packages
+
+local _G = _G
+
+package.path = string.gsub("D/?.lua;D/?/init.lua", "D/", DIR)
+
+files = {
+  ["P1/init.lua"] = "AA = 10",
+  ["P1/xuxu.lua"] = "AA = 20",
+}
+
+createfiles(files, "_ENV = {}\n", "\nreturn _ENV\n")
+AA = 0
+
+local m, ext = assert(require"P1")
+assert(ext == "libs/P1/init.lua")
+assert(AA == 0 and m.AA == 10)
+assert(require"P1" == m)
+assert(require"P1" == m)
+
+assert(package.searchpath("P1.xuxu", package.path) == D"P1/xuxu.lua")
+m.xuxu, ext = assert(require"P1.xuxu")
+assert(AA == 0 and m.xuxu.AA == 20)
+assert(ext == "libs/P1/xuxu.lua")
+assert(require"P1.xuxu" == m.xuxu)
+assert(require"P1.xuxu" == m.xuxu)
+assert(require"P1" == m and m.AA == 10)
+
+
+removefiles(files)
+AA = nil
+
+package.path = ""
+assert(not pcall(require, "file_does_not_exist"))
+package.path = "??\0?"
+assert(not pcall(require, "file_does_not_exist1"))
+
+package.path = oldpath
+
+-- check 'require' error message
+local fname = "file_does_not_exist2"
+local m, err = pcall(require, fname)
+for t in string.gmatch(package.path..";"..package.cpath, "[^;]+") do
+  local t = string.gsub(t, "?", fname)
+  assert(string.find(err, t, 1, true))
+end
+
+do  -- testing 'package.searchers' not being a table
+  local searchers = package.searchers
+  package.searchers = 3
+  local st, msg = pcall(require, 'a')
+  assert(not st and string.find(msg, "must be a table"))
+  package.searchers = searchers
+end
+
+local function import(...)
+  local f = {...}
+  return function (m)
+    for i=1, #f do m[f[i]] = _G[f[i]] end
+  end
+end
+
+-- cannot change environment of a C function
+assert(not pcall(module, 'XUXU'))
+
+
+
+-- testing require of C libraries
+
+
+local p = ""   -- On Mac OS X, redefine this to "_"
+
+-- check whether loadlib works in this system
+local st, err, when = package.loadlib(DC"lib1", "*")
+if not st then
+  local f, err, when = package.loadlib("donotexist", p.."xuxu")
+  assert(not f and type(err) == "string" and when == "absent")
+  ;(Message or print)('\n >>> cannot load dynamic library <<<\n')
+  print(err, when)
+else
+  -- tests for loadlib
+  local f = assert(package.loadlib(DC"lib1", p.."onefunction"))
+  local a, b = f(15, 25)
+  assert(a == 25 and b == 15)
+
+  f = assert(package.loadlib(DC"lib1", p.."anotherfunc"))
+  assert(f(10, 20) == "10%20\n")
+
+  -- check error messages
+  local f, err, when = package.loadlib(DC"lib1", p.."xuxu")
+  assert(not f and type(err) == "string" and when == "init")
+  f, err, when = package.loadlib("donotexist", p.."xuxu")
+  assert(not f and type(err) == "string" and when == "open")
+
+  -- symbols from 'lib1' must be visible to other libraries
+  f = assert(package.loadlib(DC"lib11", p.."luaopen_lib11"))
+  assert(f() == "exported")
+
+  -- test C modules with prefixes in names
+  package.cpath = DC"?"
+  local lib2, ext = require"lib2-v2"
+  assert(string.find(ext, "libs/lib2-v2", 1, true))
+  -- check correct access to global environment and correct
+  -- parameters
+  assert(_ENV.x == "lib2-v2" and _ENV.y == DC"lib2-v2")
+  assert(lib2.id("x") == true)   -- a different "id" implementation
+
+  -- test C submodules
+  local fs, ext = require"lib1.sub"
+  assert(_ENV.x == "lib1.sub" and _ENV.y == DC"lib1")
+  assert(string.find(ext, "libs/lib1", 1, true))
+  assert(fs.id(45) == 45)
+  _ENV.x, _ENV.y = nil
+end
+
+_ENV = _G
+
+
+-- testing preload
+
+do
+  local p = package
+  package = {}
+  p.preload.pl = function (...)
+    local _ENV = {...}
+    function xuxu (x) return x+20 end
+    return _ENV
+  end
+
+  local pl, ext = require"pl"
+  assert(require"pl" == pl)
+  assert(pl.xuxu(10) == 30)
+  assert(pl[1] == "pl" and pl[2] == ":preload:" and ext == ":preload:")
+
+  package = p
+  assert(type(package.path) == "string")
+end
+
+print('+')
+
+end  --]
+
+print("testing assignments, logical operators, and constructors")
+
+local res, res2 = 27
+
+local a, b = 1, 2+3
+assert(a==1 and b==5)
+a={}
+local function f() return 10, 11, 12 end
+a.x, b, a[1] = 1, 2, f()
+assert(a.x==1 and b==2 and a[1]==10)
+a[f()], b, a[f()+3] = f(), a, 'x'
+assert(a[10] == 10 and b == a and a[13] == 'x')
+
+do
+  local f = function (n) local x = {}; for i=1,n do x[i]=i end;
+                         return table.unpack(x) end;
+  local a,b,c
+  a,b = 0, f(1)
+  assert(a == 0 and b == 1)
+  a,b = 0, f(1)
+  assert(a == 0 and b == 1)
+  a,b,c = 0,5,f(4)
+  assert(a==0 and b==5 and c==1)
+  a,b,c = 0,5,f(0)
+  assert(a==0 and b==5 and c==nil)
+end
+
+local a, b, c, d = 1 and nil, 1 or nil, (1 and (nil or 1)), 6
+assert(not a and b and c and d==6)
+
+d = 20
+a, b, c, d = f()
+assert(a==10 and b==11 and c==12 and d==nil)
+a,b = f(), 1, 2, 3, f()
+assert(a==10 and b==1)
+
+assert(a<b == false and a>b == true)
+assert((10 and 2) == 2)
+assert((10 or 2) == 10)
+assert((10 or assert(nil)) == 10)
+assert(not (nil and assert(nil)))
+assert((nil or "alo") == "alo")
+assert((nil and 10) == nil)
+assert((false and 10) == false)
+assert((true or 10) == true)
+assert((false or 10) == 10)
+assert(false ~= nil)
+assert(nil ~= false)
+assert(not nil == true)
+assert(not not nil == false)
+assert(not not 1 == true)
+assert(not not a == true)
+assert(not not (6 or nil) == true)
+assert(not not (nil and

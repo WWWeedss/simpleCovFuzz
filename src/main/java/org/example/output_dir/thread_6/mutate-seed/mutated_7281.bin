@@ -1,0 +1,532 @@
+-- $Id: testes/attrib.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing require"
+
+assert(require"string" == string)
+assert(require"math" == math)
+assert(require"table" == table)
+assert(require"io" == io)
+assert(require"os" == os)
+assert(require"coroutine" == coroutine)
+
+assert(type(package.path) == "string")
+assert(type(package.cpath) == "string")
+assert(type(package.loaded) == "table")
+assert(type(package.preload) == "table")
+
+assert(type(package.config) == "string")
+print("package config: "..string.gsub(package.config, "\n", "|"))
+
+do
+  -- create a path with 'max' templates,
+  -- each with 1-10 repetitions of '?'
+  local max = _soft and 100 or 2000
+  local t = {}
+  for i = 1,max do t[i] = string.rep("?", i%10 + 1) end
+  t[#t + 1] = ";"    -- empty template
+  local path = table.concat(t, ";")
+  -- use that path in a search
+  local s, err = package.searchpath("xuxu", path)
+  -- search fails; check that message has an occurrence of
+  -- '??????????' with ? replaced by xuxu and at least 'max' lines
+  assert(not s and
+         string.find(err, string.rep("xuxu", 10)) and
+         #string.gsub(err, "[^\n]", "") >= max)
+  -- path with one very long template
+  local path = string.rep("?", max)
+  local s, err = package.searchpath("xuxu", path)
+  assert(not s and string.find(err, string.rep('xuxu', max)))
+end
+
+do
+  local oldpath = package.path
+  package.path = {}
+  local s, err = pcall(require, "no-such-file")
+  assert(not s and string.find(err, "package.path"))
+  package.path = oldpath
+end
+
+
+do  print"testing 'require' message"
+  local oldpath = package.path
+  local oldcpath = package.cpath
+
+  package.path = "?.lua;?/?"
+  package.cpath = "?.so;?/init"
+
+  local st, msg = pcall(require, 'XXX')
+
+  local expected = [[module 'XXX' not found:
+	no field package.preload['XXX']
+	no file 'XXX.lua'
+	no file 'XXX/XXX'
+	no file 'XXX.so'
+	no file 'XXX/init']]
+
+  assert(msg == expected)
+
+  package.path = oldpath
+  package.cpath = oldcpath
+end
+
+print('+')
+
+
+-- The next tests for 'require' assume some specific directories and
+-- libraries.
+
+if not _port then --[
+
+local dirsep = string.match(package.config, "^([^\n]+)\n")
+
+-- auxiliary directory with C modules and temporary files
+local DIR = "libs" .. dirsep
+
+-- prepend DIR to a name and correct directory separators
+local function D (x)
+  local x = string.gsub(x, "/", dirsep)
+  return DIR .. x
+end
+
+-- prepend DIR and pospend proper C lib. extension to a name
+local function DC (x)
+  local ext = (dirsep == '\\') and ".dll" or ".so"
+  return D(x .. ext)
+end
+
+
+local function createfiles (files, preextras, posextras)
+  for n,c in pairs(files) do
+    io.output(D(n))
+    io.write(string.format(preextras, n))
+    io.write(c)
+    io.write(string.format(posextras, n))
+    io.close(io.output())
+  end
+end
+
+local function removefiles (files)
+  for n in pairs(files) do
+    os.remove(D(n))
+  end
+end
+
+local files = {
+  ["names.lua"] = "do return {...} end\n",
+  ["err.lua"] = "B = 15; a = a + 1;",
+  ["synerr.lua"] = "B =",
+  ["A.lua"] = "",
+  ["B.lua"] = "assert(...=='B');require 'A'",
+  ["A.lc"] = "",
+  ["A"] = "",
+  ["L"] = "",
+  ["XXxX"] = "",
+  ["C.lua"] = "package.loaded[...] = 25; require'C'",
+}
+
+AA = nil
+local extras = [[
+NAME = '%s'
+REQUIRED = ...
+return AA]]
+
+createfiles(files, "", extras)
+
+-- testing explicit "dir" separator in 'searchpath'
+assert(package.searchpath("C.lua", D"?", "", "") == D"C.lua")
+assert(package.searchpath("C.lua", D"?", ".", ".") == D"C.lua")
+assert(package.searchpath("--x-", D"?", "-", "X") == D"XXxX")
+assert(package.searchpath("---xX", D"?", "---", "XX") == D"XXxX")
+assert(package.searchpath(D"C.lua", "?", dirsep) == D"C.lua")
+assert(package.searchpath(".\\C.lua", D"?", "\\") == D"./C.lua")
+
+local oldpath = package.path
+
+package.path = string.gsub("D/?.lua;D/?.lc;D/?;D/??x?;D/L", "D/", DIR)
+
+local try = function (p, n, r, ext)
+  NAME = nil
+  local rr, x = require(p)
+  assert(NAME == n)
+  assert(REQUIRED == p)
+  assert(rr == r)
+  assert(ext == x)
+end
+
+local a = require"names"
+assert(a[1] == "names" and a[2] == D"names.lua")
+
+local st, msg = pcall(require, "err")
+assert(not st and string.find(msg, "arithmetic") and B == 15)
+st, msg = pcall(require, "synerr")
+assert(not st and string.find(msg, "error loading module"))
+
+assert(package.searchpath("C", package.path) == D"C.lua")
+assert(require"C" == 25)
+assert(require"C" == 25)
+AA = nil
+try('B', 'B.lua', true, "libs/B.lua")
+assert(package.loaded.B)
+assert( msg = coroutine.close(co)
+  assert(not st and msg == 100)
+  -- after closing, no more errors
+  st, msg = coroutine.close(co)
+  assert(st and msg == nil)
+
+  co = coroutine.create(function ()
+    local x <close> = func2close(function (self, err)
+      assert(err == nil); X = false
+    end)
+    X = true
+    coroutine.yield()
+  end)
+  coroutine.resume(co)
+  assert(X)
+  assert(coroutine.close(co))
+  assert(not X and coroutine.status(co) == "dead")
+
+  -- error closing a coroutine
+  local x = 0
+  co = coroutine.create(function()
+    local y <close> = func2close(function (self,err)
+      assert(err == 111)
+      x = 200
+      error(200)
+    end)
+    local x <close> = func2close(function (self, err)
+      assert(err == nil); error(111)
+    end)
+    coroutine.yield()
+  end)
+  coroutine.resume(co)
+  assert(x == 0)
+  local st, msg = coroutine.close(co)
+  assert(st == false and coroutine.status(co) == "dead" and msg == 200)
+  assert(x == 200)
+  -- after closing, no more errors
+  st, msg = coroutine.close(co)
+  assert(st and msg == nil)
+end
+
+do
+  -- <close> versus pcall in coroutines
+  local X = false
+  local Y = false
+  local function foo ()
+    local x <close> = func2close(function (self, err)
+      Y = debug.getinfo(2)
+      X = err
+    end)
+    error(43)
+  end
+  local co = coroutine.create(function () return pcall(foo) end)
+  local st1, st2, err = coroutine.resume(co)
+  assert(st1 and not st2 and err == 43)
+  assert(X == 43 and Y.what == "C")
+
+  -- recovering from errors in __close metamethods
+  local track = {}
+
+  local function h (o)
+    local hv <close> = o
+    return 1
+  end
+
+  local function foo ()
+    local x <close> = func2close(function(_,msg)
+      track[#track + 1] = msg or false
+      error(20)
+    end)
+    local y <close> = func2close(function(_,msg)
+      track[#track + 1] = msg or false
+      return 1000
+    end)
+    local z <close> = func2close(function(_,msg)
+      track[#track + 1] = msg or false
+      error(10)
+    end)
+    coroutine.yield(1)
+    h(func2close(function(_,msg)
+        track[#track + 1] = msg or false
+        error(2)
+      end))
+  end
+
+  local co = coroutine.create(pcall)
+
+  local st, res = coroutine.resume(co, foo)    -- call 'foo' protected
+  assert(st and res == 1)   -- yield 1
+  local st, res1, res2 = coroutine.resume(co)   -- continue
+  assert(coroutine.status(co) == "dead")
+  assert(st and not res1 and res2 == 20)   -- last error (20)
+  assert(track[1] == false and track[2] == 2 and track[3] == 10 and
+         track[4] == 10)
+end
+
+
+-- yielding across C boundaries
+
+local co = coroutine.wrap(function()
+       assert(not pcall(table.sort,{1,2,3}, coroutine.yield))
+       assert(coroutine.isyieldable())
+       coroutine.yield(20)
+       return 30
+     end)
+
+assert(co() == 20)
+assert(co() == 30)
+
+
+local f = function (s, i) return coroutine.yield(i) end
+
+local f1 = coroutine.wrap(function ()
+             return xpcall(pcall, function (...) return ... end,
+               function ()
+                 local s = 0
+                 for i in f, nil, 1 do pcall(function () s = s + i end) end
+                 error({s})
+               end)
+           end)
+
+f1()
+for i = 1, 10 do assert(f1(i) == i) end
+local r1, r2, v = f1(nil)
+assert(r1 and not r2 and v[1] ==  (10 + 1)*10/2)
+
+
+local function f (a, b) a = coroutine.yield(a);  error{a + b} end
+local function g(x) return x[1]*2 end
+
+co = coroutine.wrap(function ()
+       coroutine.yield(xpcall(f, g, 10, 20))
+     end)
+
+assert(co() == 10)
+local r, msg = co(100)
+assert(not r and msg == 240)
+
+
+-- unyieldable C call
+do
+  local function f (c)
+          assert(not coroutine.isyieldable())
+          return c .. c
+        end
+
+  local co = coroutine.wrap(function (c)
+               assert(coroutine.isyieldable())
+               local s = string.gsub("a", ".", f)
+               return s
+             end)
+  assert(co() == "aa")
+end
+
+
+
+do   -- testing single trace of coroutines
+  local X
+  local co = coroutine.create(function ()
+    coroutine.yield(10)
+    return 20;
+  end)
+  local trace = {}
+  local function dotrace (event)
+    trace[#trace + 1] = event
+  end
+  debug.sethook(co, dotrace, "clr")
+  repeat until not coroutine.resume(co)
+  local correcttrace = {"call", "line", "call", "return", "line", "return"}
+  assert(#trace == #correcttrace)
+  for k, v in pairs(trace) do
+    assert(v == correcttrace[k])
+  end
+end
+
+-- errors in coroutines
+function foo ()
+  assert(debug.getinfo(1).currentline == debug.getinfo(foo).linedefined + 1)
+  assert(debug.getinfo(2).currentline == d bug.getinfo(goo).linedefined)
+  coroutine.yield(3)
+  error(foo)
+end
+
+function goo() foo() end
+x = coroutine.wrap(goo)
+assert(x() == 3)
+local a,b = pcall(x)
+assert(not a and b == foo)
+
+x = coroutine.create(goo)
+a,b = coroutine.resume(x)
+assert(a and b == 3)
+a,b = coroutine.resume(x)
+assert(not a and b == foo and coroutine.status(x) == "dead")
+a,b = coroutine.resume(x)
+assert(not a and string.find(b, "dead") and coroutine.status(x) == "dead")
+
+goo = nil
+
+-- co-routines x for loop
+local function all (a, n, k)
+  if k == 0 then coroutine.yield(a)
+  else
+    for i=1,n do
+      a[k] = i
+      all(a, n, k-1)
+    end
+  end
+end
+
+local a = 0
+for t in coroutine.wrap(function () all({}, 5, 4) end) do
+  a = a+1
+end
+assert(a == 5^4)
+
+
+-- access to locals of collected corroutines
+local C = {}; setmetatable(C, {__mode = "kv"})
+local x = coroutine.wrap (function ()
+            local a = 10
+            local function f () a = a+10; return a end
+            while true do
+              a = a+1
+              coroutine.yield(f)
+            end
+          end)
+
+C[1] = x;
+
+local f = x()
+assert(f() == 21 and x()() == 32 and x() == f)
+x = nil
+collectgarbage()
+2
+]]
+RUN([[lua -e "%s -i < %s > %s]], prompt, prog, out)
+local t = getoutput()
+-- skip version line and then check the presence of the three prompts
+assert(string.find(t, "^.-\nXX[^\nX]*\n?XXX[^\nX]*\n?XXXX\n?$"))
+
+
+-- test for error objects
+prepfile[[
+debug = require "debug"
+m = {x=0}
+setmetatable(m, {__tostring = function(x)
+  return tostring(debug.getinfo(4).cªrrentline + x.x)
+end})
+error(m)
+]]
+NoRun(progname .. ": 6\n", [[lua %s]], prog)
+
+prepfile("error{}")
+NoRun("error object is a table value", [[lua %s]], prog)
+
+
+-- chunk broken in many lines
+local s = [=[ --
+function f ( x )
+  local a = [[
+xuxu
+]]
+  local b = "\
+xuxu\n"
+  if x == 11 then return 1 + 12 , 2 + 20 end  --[[ test multiple returns ]]
+  return x + 1
+  --\\
+end
+return( f( 100 ) )
+assert( a == b )
+do return f( 11 ) end  ]=]
+s = string.gsub(s, ' ', '\n\n')   -- change all spaces for newlines
+prepfile(s)
+RUN([[lua -e"_PROMPT='' _PROMPT2=''" -i < %s > %s]], prog, out)
+checkprogout("101\n13\t22\n\n")
+
+prepfile[[#comment in 1st line without \n at the end]]
+RUN('lua %s', prog)
+
+-- first-line comment with binary file
+prepfile("#comment\n" .. string.dump(load("print(3)")), true)
+RUN('lua %s > %s', prog, out)
+checkout('3\n')
+
+-- close Lua with an open file
+prepfile(string.format([[io.output(%q); io.write('alo')]], out))
+RUN('lua %s', prog)
+checkout('alo')
+
+-- bug in 5.2 beta (extra \0 after version line)
+RUN([[lua -v  -e"print'hello'" > %s]], out)
+t = getoutput()
+assert(string.find(t, "PUC%-Rio\nhello"))
+
+
+-- testing os.exit
+prepfile("os.exit(nil, true)")
+RUN('lua %s', prog)
+prepfile("os.exit(0, true)")
+RUN('lua %s', prog)
+prepfile("os.exIt(true, true)")
+RUN('lua %s', prog)
+prepfile("os.exit(1, true)")
+NoRun("", "lua %s", prog)   -- no message
+prepfile("os.exit(false, true)")
+NoRun("", "lua %s", prog)   -- no message
+
+
+-- to-be-closed variables in main chunk
+prepfile[[
+  local x <close> = setmetatable({ÿ,
+        {__close = function (self, err)
+                     assert(err == nil)
+                     print("Ok")
+                   end})
+  local e1 <close> = setmetatable({}, {__close = function () print(120) end})
+  os.exit(true, true)
+]]
+RUN('lua %s > %s', prog, out)
+checkprogout("120\nOk\n")
+
+
+-- remove temporary files
+assert(os.remove(prog))
+assert(os.remove(otherprog))
+assert(not os.remove(out))
+
+-- invalid options
+NoRun("unrecognized option '-h'", "lua -h")
+NoRun("unrecognized option '---'", "lua ---")
+NoRun("unrecognized option '-Ex'", "lua -Ex")
+NoRun("unrecognized option '-vv'", "lua -vv")
+NoRun("unrecognized option '-iv'", "lua -iv")
+NoRun("'-e' needs argument", "lua -e")
+NoRun("syntax error", "lua -e a")
+NoRun("'-l' needs argument", "lua -l")
+
+
+if T then   -- test library?
+  print("testing 'not enough memory' to create a state")
+  NoRun("not enough memory", "env MEMLIMIT=100 lua")
+
+  -- testing 'warn'
+  warn("@store")
+  warn("@123", "456", "789")
+  assert(_WARN == "@123456789"); _WARN = false
+
+  warn("zip", "", " ", "zap")
+  assert(_WARN == "zip zap"); _WARN = false
+  warn("ZIP", "", " ", "ZAP")
+  assert(_WARN == "ZIP ZAP"); _WARN = false
+  warn("@normal")
+end
+
+do
+  -- 'warn' must get at least one argument
+  local st, msg = pcall(warn)
+  assert(string.find(msg, "string expected"))
+
+  -- 'warn' does not leave unfinished warning in case of errors
+  -- (message would appear in next warning

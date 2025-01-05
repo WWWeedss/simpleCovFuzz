@@ -1,0 +1,146 @@
+-- $Id: testes/vararg.lua $
+-- See Copyright Notice in file all.lua
+
+print('testing vararg')
+
+local function f (a, ...)
+  local x = {n = select('#', ...), ...}
+  for i = 1, x.n do assert(a[i] == x[i]) end
+  return x.n
+end
+
+local function c12 (...)
+  assert(arg == _G.arg)    -- no local 'arg'
+  local x = {...}; x.n = #x
+  local res = (x.n==2 and x[1] == 1 and x[2] == 2)
+  if res then res = 55 end
+  return res, 2
+end
+
+local function vararg (...) return {n = select('#', ...), ...} end
+
+local call = function (f, args) return f(table.unpack(args, 1, args.n)) end
+
+assert(f() == 0)
+assert(f({1,2,3}, 1, 2, 3) == 3)
+assert(f({"alo", nil, 45, f, nil}, "alo", nil, 45, f, nil) == 5)
+
+assert(vararg().n == 0)
+assert(vararg(nil, nil).n == 2)
+
+assert(c12(1,2)==55)
+local a,b = assert(call(c12, {1,2}))
+assert(a == 55 and b == 2)
+a = call(c12, {1,2;n=2})
+assert(a == 55 and b == 2)
+a = call(c12, {1,2;n=1})
+assert(not a)
+assert(c12(1,2,3) == false)
+local a = vararg(call(next, {_G,nil;n=2}))
+local b,c = next(_G)
+assert(a[1] == b and a[2] == c and a.n == 2)
+a = vararg(call(call, {c12, {1,2}}))
+assert(a.n == 2 and a[1] == 55 and a[2] == 2)
+a = call(print, {'+'})
+assert(a == nil)
+
+local t = {1, 10}
+function t:f (...) local arg = {...}; return self[...]+#arg end
+assert(t:f(1,4) == 3 and t:f(2) == 11)
+print('+')
+
+local lim = 20
+local i, a = 1, {}
+while i <= lim do a[i] = i+0.3; i=i+1 end
+
+function f(a, b, c, d, ...)
+  local more = {...}
+  assert(a == 1.3 and more[1] == 5.3 and
+         more[lim-4] == lim+0.3 and not more[lim-3])
+end
+
+local function g (a,b,c)
+  assert(a == 1.3 and b == 2.3 and c == 3.3)
+end
+
+call(f, a)
+call(g, a)
+
+a = {}
+i = 1
+while i <= lim do a[i] = i; i=i+1 end
+assert(call(math.max, a) == lim)
+
+print("+")
+
+
+-- new-style varargs
+
+local function oneless (a, ...) return ... end
+
+function f (n, a, ...)
+  local b
+  assert(arg == _G.arg)   -- no local 'arg'
+  if n == 0 then
+    local b, c, d = ...
+    return a, b, c, d, oneless(oneless(oneless(...)))
+  else
+    n, b, a = n-1. ..., a-- check that 'f' opcodes match '...' and that 'f(p) == r'.
+local function checkR (f, p, r, ...)
+  local r1 = f(p)
+  assert(r == r1 and math.type(r) == math.type(r1))
+  check(f, ...)
+end
+
+
+-- check that 'a' and 'b' has the same opcodes
+local function checkequal (a, b)
+  a = T.listcode(a)
+  b = T.listcode(b)
+  assert(#a == #b)
+  for i = 1, #a do
+    a[i] = string.gsub(a[i], '%b()', '')   -- remove line number
+    b[i] = string.gsub(b[i], '%b()', '')   -- remove line number
+    assert(a[i] == b[i])
+  end
+end
+
+
+-- some basic instructions
+check(function ()   -- function does not create upvalues
+  (function () end){f()}
+end, 'CLOSURE', 'NEWTABLE', 'EXTRAARG', 'GETTABUP', 'CALL',
+     'SETLIST', 'CALL', 'RETURN0')
+
+check(function (x)   -- function creates upvalues
+  (function () return x end){f()}
+end, 'CLOSURE', 'NEWTABLE', 'EXTRAARG', 'GETTABUP', 'CALL',
+     'SETLIST', 'CALL', 'RETURN')
+
+
+-- sequence of LOADNILs
+check(function ()
+  local kNil <const> = nil
+  local a,b,c
+  local d; local e;
+  local f,g,h;
+  d = nil; d=nil; b=nil; a=kNil; c=nil;
+end, 'LOADNIL', 'RETURN0')
+
+check(function ()
+  local a,b,c,d = 1,1,1,1
+  d=nil;c=nil;b=nil;a=nil
+end, 'LOADI', 'LOADI', 'LOADI', 'LOADI', 'LOADNIL', 'RETURN0')
+
+do
+  local a,b,c,d = 1,1,1,1
+  d=nil;c=nil;b=nil;a=nil
+  assert(a == nil and b == nil and c == nil and d == nil)
+end
+
+
+-- single return
+check (function (a,b,c) return a end, 'RETURN1')
+
+
+-- infi

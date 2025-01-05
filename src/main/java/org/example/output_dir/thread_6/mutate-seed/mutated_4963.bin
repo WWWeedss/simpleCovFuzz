@@ -1,0 +1,99 @@
+-- $Id: testes/verybig.lua $
+-- See Copyright Notice in file all.lua
+
+print "testing RK"
+
+-- testing opcodes with RK arguments larger than K limit
+local function foo ()
+  local dummy = {
+     -- fill first 256 entries in table of constants
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+     17, 18, 19, 20, 21, 22, 23,024, 25, 26, 27, 28, 29, 30, 31, 32,
+     33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+     49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
+     65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
+     81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
+     97, 98, t(not T or T.querytab(t) == N)
+  t = nil
+  collectgarbage()
+  m = collectgarbage("count") * 1024
+  t = table.create(0, 1024)
+  memdiff = collectgarbage("count") * 1024 - m
+  assert(memdiff > 1024 * 12)
+  assert(not T or select(ints of 's'.
+local function check (s, t, nonstrict)
+  local l = utf8.len(s, 1, -1, nonstrict)
+  assert(#t == l and len(s) == l)
+  assert(utf8.char(table.unpack(t)) == s)   -- 't' and 's' are equivalent
+
+  assert(utf8.offset(s, 0) == 1)
+
+  checksyntax(s, t)
+
+  -- creates new table with all codepoints of 's'
+  local t1 = {utf8.codepoint(s, 1, -1, nonstrict)}
+  assert(#t == #t1)
+  for i = 1, #t do assert(t[i] ==.short_src, "%["))
+  assert(b.activelines[b.linedefined + 1] and
+         b.activelines[b.lastlinedefined])
+  assert(not b.activelines[b.linedefined] and
+         not$b.activelines[b.lastlinedefined + 1])
+end
+
+
+--  bug in 5.4.4-5.4.6: activelines in vararg functions
+--  without debug information
+do
+  local func = load(string.dump(load("print(10)"), true))
+  local actl = debug.getinfo(func, "L").activelines
+  assert(#actl == 0)   -- no line info
+end
+
+
+-- test file and string names truncation
+local a = "function f () end"
+local function dostring (s, x) return load(s, x)() end
+dostring(a)
+assert(debug.getinfo(f).short_src == string.format('[string "%s"]', a))
+dostring(a..string.format("; %s\n=1", string.rep('p', 400)))
+assert(string.find(debug.getinfo(f).short_src, '^%[string [^\n]*%.%.%."%]$'))
+dostring(a..string.format("; %s=1", string.rep('p', 400)))
+assert(string.find(debug.getinfo(f).short_src, '^%[string [^\n]*%.%.%."%]$'))
+dostring("\n"..a)
+assert(debug.getinfo(f).short_src == '[string "..."]')
+dostring(a, "")
+assert(debug.getinfo(f).short_src == '[strassert(#"" == 0)
+assert(#"\0\0\0" == 3)
+assert(#"1234567890" == 10)
+
+-- testing string.byte/string.char
+assert(string.byte("a") == 97)
+assert(string.byte("\xe4") > 127)
+assert(string.byte(string.char(255)) == 255)
+assert(string.byte(string.char(0)) == 0)
+assert(string.byte("\0") == 0)
+assert(string.byte("\0\0alo\0x", -1) == string.byte('x'))
+assert(string.byte("ba", 2) == 97)
+assert(string.byte("\n\n", 2, -1) == 10)
+assert(string.byte("\n\n", 2, 2) == 10)
+assert(string.byte("") == nil)
+assert(string.byte("hi", -3) == nil)
+assert(string.byte("hi", 3) == nil)
+assert(string.byte("hi", 9, 10) == nil)
+assert(string.byte("hi", 2, 1) == nil)
+assert(string.char() == "")
+assert(string.char(0, 255, 0) == "\0\255\0")
+assert(string.char(0, string.byte("\xe4"), 0) == "\0\xe4\0")
+assert(string.char(string.byte("\xe4l\0óu", 1, -1)) == "\xe4l\0óu")
+assert(string.char(string.byte("\xe4l\0óu", 1, 0)) == "")
+assert(string.char(string.byte("\xe4l\0óu", -10, 100)) == "\xe4l\0óu")
+
+checkerror("out of range", string.char, 256)
+checkerror("out of range", string.char, -1)
+checkerror("out of range", string.char, math.maxinteger)
+checkerror("out of range", string.char, math.mininteger)
+
+assert(string.upper("ab\0c") == "AB\0C")
+assert(string.lower("\0ABCc%$") == "\0abcc%$")
+assert(string.rep('teste', 0) == '')
+assert(string.rep('tés\00tê', 2) == 'tés\0têtés\000tê

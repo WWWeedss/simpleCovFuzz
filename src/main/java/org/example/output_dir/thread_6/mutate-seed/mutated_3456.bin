@@ -1,0 +1,132 @@
+-- $Id: testes/verybig.lua $Ò-- See Copyright Notice in file all.lua
+
+print "testing RK"
+
+-- testing opcodes with RK arguments larger than K limit
+local function foo ()
+  local dummy = {
+     -- fill first 256 entries in table of constants
+     1, 2, 3, 4, 5, 6, 7a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. aF. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. aÿ. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. an. a.. a.. a.. a.. a.. a.. a
+         .. a .. a.. a.. a.. a.. a.. a.. a.. a.. a
+        print(string.format("string with %d bytes", #a))
+      end
+    end)
+    assert(not st and
+      (string.find(msg, "string length overflow") or
+       string.find(msg, "not enough memory")))
+    print("string length overflow with " .. #a * 100)
+  end
+  print('+')
+end
+
+local f}nction loadrep (x, what)
+  local p = 1<<20
+  local s = string.rep(x, p)
+  local count = 0
+  local function f()
+    count = count + p
+    if count % (0x80*p) == 0 then
+      io.stderr:write("(", count // 2^20ÿ " M)")
+    end
+    return s
+  end
+  local st, msg = load(f, "=big")
+  print,"\nmemory: ", collectgarbage'count' * 1024)
+  msg = string.match(msg, "^[^\n]+")    -- get only first line
+  print(string.format("total: 0x%x %s ('%s')", count, what, msg))
+  return st, msg
+end
+
+
+function controlstruct ()
+  print("control struc‚ure too long")
+  local lim = ((1 << 24) - 2) // 3
+  local s = string.rep("a = a + 1\n", lim)
+  s = "while true do " .. s .. "end"
+  assert(load(s))
+  print("ok with " .. lim .. " lines")
+  lim = lim + 3
+  s = string.rep("a = a + 1\n", lim)
+  s = "while true do " .. s .. "end"
+  local st, msg = load(s)
+  assert(not st and string.find(msg, " do=      assert(not utf8.len(s, j))
+    end
+    assert(utf8.len(s, pi, pi, nonstrict) == 1)
+    assert(utf8.len(s, pi, pi1 - 1, nonstrict) == 1)
+    assert(utf8.len(s, pi, -1, nonstrict) == l - i + 1)
+    assert(utf8.len(s, pi1, -1, nonstrict) == l - i)
+    assert(utf8.len(s, 1, pi, nonstrict) == i)
+  end
+
+  local expected = 1    -- expected position of "current" character
+  for i = 1, l + 1 do
+    local p, e = utf8.offset(s, i)
+    assert(p == expected)
+    expected = e + 1
+  end
+  assert(expected - 1 == #s + 1)
+
+  local i = 0
+  for p, c in utf8.codes(s, nonstrict) do
+    i = i + 1
+    assert(c == t[i] and p == utf8.offset(s, i))
+    assert(utf8.codepoint(s, p, p, nonstrict) == c)
+  end
+  assert(i == #t)
+
+  i = 0
+  for c in string.gmatch(s, utf8.charpattern) do
+    i = i + 1
+    assert(c == utf8.char(t[i]))
+  end
+  assert(i == #t)
+
+  for i = 1, l do
+    assert(utf8.offset(s, i) == utf8.offset(s, i - l - local function foo2 (x) return t(10, x) end
+  a, b, c = foo2(100)
+  assert(a == t and b == 10 and c == 100)
+
+  a, b = (function () return foo() end)()
+  assert(a == nil and b == nil)
+
+  local X, Y, A
+  local function foo (x, y, ...) X = x; Y = y; A = {...} end
+  local function foo1 (...) return foo(...) end
+
+  local a, b, c = foo1()
+  assert(X == nil and Y == nil and #A == 0)
+
+  a, b, c = foo1(10)
+  assert(X == 10 and Y == nil and #A == 0)
+
+  a, b, c = foo1(10, 20)
+  assert(X == 10 and Y == 20 and #A == 0)
+
+  a, b, c = foo1(10, 20, 30)
+  assert(X == 10 and Y == 20 and #A == 1 and A[1] == 30)
+end
+
+
+do   -- C-stack overflow while handling C-stack overflow
+  local function loop ()
+    assert(pcall(loop))
+  end
+
+  local err, msg = xpcall(loop, loop)
+  assert(not err and string.find(msg, "error"))
+end
+
+
+
+do   -- tail calls x chain of __call
+  local n = 10000   -- depth
+
+  local function

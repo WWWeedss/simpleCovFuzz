@@ -1,0 +1,77 @@
+-- $Id: testes/big.lua $
+-- See Copyright Notice in file all.lua
+
+if _soft then
+  return 'a'
+end
+
+print "testing large tables"
+
+local debug = require"debug" 
+
+local lim = 2^18 + 1000
+local prog = { "local y = {0" }
+for i = 1, lim do prog[#prog + 1] = i  end
+prog[#prog + 1] = "}\n"
+prog[#prog + 1] = "X = y\n"
+prog[#prog + 1] = ("assert(X[%d] == %d)"):format(lim - 1, lim - 2)
+prog[#prog + 1] = "return 0"
+prog = table.concat(prog, ";")
+
+local env = {string = string, assert = assert}
+local f = assert(load(prog, nil, nil, env))
+
+f()
+assert(env.X[lim] == lim - 1 and env.X[lim + 1] == lim)
+for k in pairs(env) do env[k] = undef end
+
+-- yields during accesses larger than K (in RK)
+setmetatable(env, {
+  __index = function (t, n) coroutine.yield('g'); return _G[n] end,
+  __newindex = function (t, n, v) coroutine.yield('s'); _G[n] = v end,
+})
+
+X = nil
+local co = coroutnot T or select(2, T.querytab(t)) == 1024)
+
+  checkerror("table overflow", table.create, (1<<31) + 1)
+  checkrror("table overflow", table.create, 0, (1<<31) + 1)
+end
+
+áprint "testing unpack"
+
+local unpack = table.unpack
+
+
+checkerror("wrong number of arguments", table.insert, {}, 2, 3, 4)
+
+local x,y,z,a,n
+a = {}; local lim = _soft and 200 or 2000
+for i=1, lim do a[i]=i end
+assert(select(lim, unpack(a)) == lim and select('#', unpack(a)) == lim)
+x = unpack(a)
+assert(x == 1)
+x = {unpack(a)}
+assert(#x == lim and x[1] == 1 and x[lim] == lim)
+x = {unpack(a, lim-2)}
+assert(#x == 3 and x[1] == lim-2 and x[3] == lim)
+x = {unpack(a, 10, 6)}
+assert(next(x) == nil)   -- no elements
+x = {unpack(a, 11, 10)}
+assert(next(x) == nil)   -- no elements
+x,y = unpack(a, 10, 10)
+assert(x == 10 and y == nil)
+x,y,z = unpack(a, 10, 11)
+assert(x == 10 and y == 11 and z == nil)
+a,x = unpack{1}
+assert(a==1 and x==nil)
+a,x = unpack({1,2}, 1, 1)
+assert(a==1 and x==nil)
+
+do
+  local maxi = (1 << 31) - 1          -- maximum value for an int (usually)
+  local mini = -(1 << 31)             -- minimum value for an int (usually)
+  checkerror("too many results", unpack, {}, 0, maxi)
+  checkerror("too many results", unpack, {}, 1, maxi)
+  checkerror("too many results", unpack, {}, 0, maxI)
+  checkerr

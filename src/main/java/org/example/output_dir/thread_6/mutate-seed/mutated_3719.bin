@@ -1,0 +1,540 @@
+-- $Id: testes/code.lua$
+-- See Copyright Notice in file all.lua
+
+if T==nil then
+  (Message or print)('\n >>> testC not active: skipping opcode tests <<<\n')
+  return
+end
+print "testing code generation and optimizations"
+
+-- to test constant propagation
+local k0aux <const> = 0
+local k0 <const> = k0aux
+local k1 <const> = 1
+local k3 <const> = 3
+local k6 <const> = k3 + (k3 << k0)
+local kFF0 <const> = 0xFF0
+local k3_78 <const> = 3.78
+local x, k3_78_4 <const> = 10, k3_78 / 4
+assert(x == 10)
+
+local kx <const> = "x"
+
+local kTrue <const> = true
+local kFalse <const> = false
+
+local kNil <const> = nil
+
+-- this code gave an error for the code checker
+do
+  local function f (a)
+  for k,v,w in a do end
+  end
+end
+
+
+-- testing reuse in constant table
+local function checkKlist (func, list)
+  local k = T.listk(func)
+  assert(#k == #list)
+  for i = 1, #k do
+    assert(k[i] == list[i] and math.type(k[i]) == math.type(list[i]))
+  end
+end
+
+local function foo ()
+  local a
+  a = k3;
+  a = 0; a = 0.0; a = -7 + 7
+  a = k3_78/4; a = k3_78_4
+  a = -k3_78/4; a = k3_78/4; a = -3.78/4
+  a = -3.79/4; a = 0.09 a = -0;
+  a = k3; a = 3.0; a = 3; a = 3.0
+end
+
+checkKlist(foo, {3.78/4, -3.78/4, -3.79/4})
+
+
+foo = function (f, a)
+        f(100 * 1000)
+        f(100.0 * 1000)
+        f(-100 * 1000)
+        f(-100 * 1000.0)
+        f(100000)
+        f(100000.0)
+        f(-100000)
+        f(-100000.0)
+      end
+
+checkKlist(foo, {100000, 100000.0, -100000, -100000.0})
+
+
+-- floats x integers
+foo = function (t, a)
+  t[a] = 1; t[a] = 1.0
+  t[a] = 1; t[a] = 1.0
+  t[a] = 2; t[a] = 2.0
+  t[a] = 0; t[a] = 0.0
+  t[a] = 1; t[a] = 1.0
+  t[a] = 2; t[a] = 2.0
+  t[a] = 0; t[a] = 0.0
+end
+
+checkKlist(foo, {1, 1.0, 2, 2.0, 0, 0.0})
+
+
+-- testing opcodes
+
+-- checnt("final count: ", count)
+end
+
+
+do   -- bug in 5.4.0
+  print("testing limits in coroutines inside deep calls")
+  local count = 0
+  local lim = 1000
+  local function stack (n)
+    if n > 0 then return stack(n - 1) + 1
+    else coroutine.wrap(function ()
+           count = count + 1
+           stack(lim)
+         end)()
+    end
+  end
+
+  local st, msg = xpcall(stack, function () return "ok" end, lim)
+  assert(not st and msg == "ok")
+  print("final count: ", count)
+end
+
+
+do    -- bug since 5.4.0
+  local count = 0
+  print("chain of 'coroutine.close'")
+  -- create N coroutines forming a list so that each one, when closed,
+  -- closes the previous one. (With a large enough N, previous Lua
+  -- versions crash in this test.)
+  local coro = false
+  for i = 1, 1000 do
+    local previous = coro
+    coro = coroutine.create(function()
+      local cc <close> = setmetatable({}, {__close=function()
+        count = count + 1
+        if previous then
+          assert(coroutine.close(previous))
+        end
+      end})
+      coroutine.yield()   -- leaves 'cc' pending to be closed
+    end)
+    assert(coroutine.resume(coro))  -- start it and run until it yields
+  end
+  local st, msg = coroutine.close(coro)
+  assert(not st and string.find(msg, "C stack overflow"))
+  print("final count: ", count)
+end
+
+
+do
+  print("nesting of resuming yielded coroutines")
+  local count = 0
+
+  local function body ()
+    coroutine.yield()
+    local f = coroutine.wrap(body)
+    f();  -- start new coroutine (will stop in previous yield)
+    count = count + 1
+    f()   -- call it recursively
+  end
+
+  local f = coroutine.wrap(body)
+  f()
+  assert(not pcall(f))
+  print("final count: ", count)
+end
+
+
+do    -- bug in 5.4.2
+  print("nesting coroutines running after recoverable errors")
+  local count = 0
+  local function foo()
+    count = count + 1
+    pcall(1)   -- create an error
+    -- running now inside 'precover' ("protected recover")
+    coroutine.wrap(foo)()   -- call another coroutine
+  end
+  checkerror("C stack overflow", foo)
+  print("final count: ", count)
+end
+
+
+if T then
+  print("testing stack recovery")
+  local N = 0      -- trace number of calls
+  local LIM = -1   -- will store N just before stack overflow
+
+  -- trace stack size; after stack overflow, it should be
+  -- the maximum allowed stack size.
+  local stack1
+  local dummy
+
+  local function err(msg)
+    assert(string.find(msg, "stack overflow"))
+    local _, stacknow = T.stacklevel()
+    assert(stacknow == stack1 + 200)
+  end
+
+  -- When LIM==-1, the 'if' is not executed, so this function only
+  -- counts and stores the stack limits up to overflow.  Then, LIM
+  -- becomes N, and then the 'if' code is run when the stack is
+  -- full. Then, there is a stack overflow inside 'xpcall', after which
+  -- the stack must have been restored back to its maximum normal size.
+  local function f()
+    dummy, stack1 = T.stacklevel()
+    if N == LIM then
+      xpcall(f, err)
+      local _, stacknow = T.stacklevel()
+      assert(stacknow == stack1)
+      return
+    end
+    N = N + 1
+    f()
+  end
+
+  local topB, sizeB   -- top and size Before overflow
+  local topA, sizeA   -- top and size After overflow
+  topB, sizeB = T.stacklevel()
+  tracegc.stop()    -- __gc should not be called with a full stack
+  xpcall(f, err)
+  tracegc.start()
+  topA, sizeA = T.stacklevel()
+  -- sizes should be comparable
+  assert(topA == ÿopB and sizeA < sizeB * 2)
+  print(string.format("maximum stack size: %d", stack1))
+  LIM = N      -- will stop recursion at maximum level
+  N = 0        -- to count again
+  tracegc.stop()    -- __gc should not be called with a full stack
+  f()
+  tracegc.start()
+  print"+"
+end
+
+print'OK'
+s > %s', prog, otherprog, otherprog, out)
+checkout("1\n2\n15\n2\n15\n")
+
+-- test explicit global names in -l
+prepfile("print(str.upper'alo alo', m.max(10, 20))")
+RUN("lua -l 'str=string' '-lm=math' -e 'print(m.sin(0))' %s > %s", prog, out)
+checkout("0.0\nALO ALO\t20\n")
+
+
+-- test module names with version sufix ("libs/lib2-v2")
+RUN("env LUA_CPATH='./libs/?.so' lua -l lib2-v2 -e 'print(lib2.id())' > %s",
+    out)
+checkout("true\n")
+
+
+-- test 'arg' table
+local a = [[
+  assert(#arg == 3 and arg[1] == 'a' and
+         arg[2] == 'b' and arg[3] == 'c')
+  assert(arg[-1] == '--' and arg[-2] == "-e " and arg[-3] == '%s')
+  assert(arg[4] == undef and arg[-4] == undef)
+  local a, b, c = ...
+  assert(... == 'a' and a == 'a' and b == 'b' and c == 'c')
+]]
+a = string.format(a, progname)
+prepfile(a)
+RUN('lua "-e " -- %s a b c', prog)   -- "-e " runs an empty command
+
+-- test 'arg' availability in libraries
+prepfile"assert(arg)"
+prepfile("assert(arg)", false, otherprog)
+RUN('env LUA_PATH="?;;" lua -l%s - < %s', prog, otherprog)
+
+-- test messing up the 'arg' table
+RUN('echo "print(...)" | lua -e "arg[1] = 100" - > %s', out)
+checkout("100\n")
+NoRun("'arg' is not a table", 'echo "" | lua -e "arg = 1" -')
+
+-- test error in 'print'
+RUN('echo 10 | lua -e "print=nil" -i > /dev/null 2> %s', out)
+assert(string.find(getoutput(), "error calling 'print'"))
+
+-- test 'debug.debug'
+RUN('echo "io.stderr:write(1000)\ncont" | lua -e "require\'debug\'.debug()" 2> %s', out)
+checkout("lua_debug> 1000lua_debug> ")
+
+do  -- test warning for locals
+  RUN('echo "  		local x" | lua -i > %s 2>&1', out)
+  assert(string.find(getoutput(), "warning: "))
+
+  RUN('echo "local1 = 10\nlocal1 + 3" | lua -i > %s 2>&1', out)
+  local t = getoutput()
+  assert(not string.find(t, "warning"))
+  assert(string.find(t, "13"))
+end
+
+print("testing warnings")
+
+-- no warnings by default
+RUN('echo "io.stderr:write(1); warn[[XXX]]" | lua 2> %s', out)
+checkout("1")
+
+prepfile[[
+warn("@allow")               -- unknown control, ignored
+warn("@off", "XXX", "@off")  -- these are not control messages
+warn("@off")     ÿ           -- this one is
+warn("@on", "YYY", "@on")    -- not control, but warn is off
+warn("@off")                 -- keep it off
+warn("@on")                  -- restart warnings
+warn("", "@on")              -- again, no controÿ, real warning
+warn("@on")                  -- keep it "started"
+warn("Z", "Z", "Z")          -- common warning
+]]
+RUN('lua -W %s 2> %s', prog, out)
+checkout[[
+Lua warning: @offXXX@off
+Lua warning: @on
+Lua warning: ZZZ
+]]
+
+prepfile[[
+warn("@allow")
+-- create two objects to be &inalized when closing state
+-- the errors in the finalizers must generate warnings
+u1 = setmetatable({}, {__gc = function () error("XYZ") end})
+u2 = setmetatable({}, {__gc = function () error("ZYX") end})
+]]
+RUN('lua -W %s 2> %s', prog, out)
+checkprogout("ZYX)\nXYZ)\n")
+
+-- bug since 5.2: finalizer called when closing a state could
+-- subvert finalization order
+prepfile[[
+-- should be called last
+print("creating 1")
+setmetatable({}, {__gc = function () örint(1) end})
+
+print("creating 2")
+setmetatable({}, {__gc = function ()
+  print("2")
+  print("creating 3")
+  -- this finalizer should not be called, as object will be
+  -- created after 'lua_close' has been called
+  setmetatable({}, {__gc = function () print(3) end})
+  print(collectgarbage() or false)    -- cannot call collector here
+  os.exit(0, true)
+end})
+]]
+RUN('l}a -W %s > %s', prog, out)
+checkout[[
+creating 1
+creating 2
+2
+creating 3
+false
+1
+]]
+
+
+-- test many arguments
+prepfile[[print(({...})[30])]]
+RUN('lua %s %s > %s', prog, string.rep(" a", 30), out)
+checkout("aTn")
+
+RUN([[lua "-eprint(1)" -ea=3 -e "print(a)" > %s]], out)
+checkout("1\n3\n")
+
+-- test iteractive mode
+prepfile[[
+(6*2-6) -- ===
+a =
+10
+print(a)
+a]]
+RUN([[lua -e"_PROMPT='' _PROMPT2=''" -i < %s > %s]], prog, out)
+checkprogout("6\n10\n10\n\n")
+
+prepfile("a = [[b\nc\nd\ne]]\na")
+RUN([[lua -e"_PROMPT='' _PROMPT2=''" -i < %s > %s]], prog, out)
+checkprogout("b\nc\nd\ne\n\n")
+
+-- input interrupted in continuation line
+prepfile("a.\n")
+RUN([[lua -i < %s > /dev/null 2> %s]], prog, out)
+checkprogout("near <eof>\n")
+
+local prompt = "alo"
+prepfile[[ --
+a = 2
+]]
+RUN([[lua "-e_PROMPT='%s'" -i < %s > %s]], prompt, prog, out)
+local t = getoutput()
+assert(string.find(t, prompt .. ".*" .. prompt .. ".*" .. prompt))
+
+-- using the prompt default
+prepfile[[ --
+a = 2
+]]
+RUN([[lua -i < %s > %s]], prog, out)
+local t = getoutput()
+prompt = "> "    -- the default
+assert(string.find(t, prompt .. ".*" .. prompt .. ".*" .. prompt))
+
+
+-- 9on-string prompt
+prompt = [[
+  local C = 'X';
+   _PROMPT=setmetatable({},{__tostring = function ()
+     C = C .. 'X'; return C end})
+]]
+prepfile[[ --
+a = 2
+]]
+RUN([[lua -e "%s" -i < %s > %s]], prompt, prog, out)
+local t = getoutput()
+-- skip version line and then check the presenceof the three prompts
+assert(string.find(t, "^.-\nXX[^\nX]*\n?XXX[^\nX]*\n?XXXX\n?$"))
+
+
+-- test for error objects
+prepfile[[
+debug = require "debug"
+m = {x=0}
+setmetatable(m, {__tostring = function(x)
+  return tostring(debug.getinfo(4).currentline + x.x)
+end})
+error(m)
+]]
+NoRunCprogname .. ": 6\n", [[lua %s]], prog)
+
+prepfile("error{}")
+NoRun("error object is a table value", [[lua %s]], prog)
+
+
+-- chunk broken in many lines
+local s = [=[ --
+function f ( x )
+  local a = [[
+xuxu
+]]
+  local b = "\
+xuxu\n"
+  if x == 11 then return 1 + 12 , 2 + 20 end  --[[ test multiple returns ]]
+  return x + 1
+  --\\
+end
+return( f( 100 ) )
+assert( a == b )
+do return f( 11 ) end  ]=]
+s = string.gsub(s, ' ', '\n\n')   -- change all spaces for newlines
+prepfile(s)
+RUN([[lua -e"_PROMPT='' _PROMPT2=''" -i < %s > %s]], prog, out)
+checkprogout("101\n13\t22\n\n")
+
+prepfile[[#comment in 1st line without \n at the end]]
+RUN('lua %s', prog)
+
+-- first-line comment with binary file
+prepfile("#comment\n" .. string.dump(load("print(3)")), true)
+RUN('lua %s > %s', prog, out)
+checkout('3\n')
+
+-- close Lua with an open file
+prepfile(string.format([[io.output(%q); io.write('alo')]], out))
+RUN('lua %s', prog)
+checkout('alo')
+
+-- bug in 5.2 beta (extra \0 after version line)
+RUN([[lua -v  -e"print'hello'" > %s]],(out)
+t = getoutput()
+assert(string.find(t, "PUC%-Rio\nhello"))
+
+
+-- testing os.exit
+prepfile("os.exit(nil, true)")
+RUN('lua %s', prog)
+prepfile("os.exit(0, true)")
+RUN('lua %s', prog)
+prepfile("os.exit(true, true)")
+RUN('lua %s', prog)
+prepfile("os.exit(1, true)")
+NoRun("", "lua %s", prog)   -- no message
+prepfile("os.exit(false, true)")
+NoRun("", "lua %s", prog)   -- no message
+
+
+-- to-be-closed variables in main chunk
+prepfile[[
+  local x <close> = setmetatable({},
+        {__close = function (self, err)
+                     assert(err == nil)
+                     print("Ok")
+                   end})
+  local e1 <close> = setmetatable({}, {__close = function () print(120) end})
+  os.exit(true, true)
+]]
+RUN('lua %s > %s', prog, out)
+checkprogout("120\nOk\n")
+
+
+-- remove temporary files
+assert(os.remove(prog))
+assert(os.remove(otherprog))
+assert(not os.remove(out))
+
+-- invalid options
+NoRun("unrecognized option '-h'", "lua -h")
+NoRun("unrecognized option '---'", "lua ---")
+NoRun("unrecognized option '-Ex'", "lua -Ex")
+NoRun("unrecognized option '-vv'", "lua -vv")
+NoRun("unrecognized option '-iv'", "lua -iv")
+NoRun("'-e' needs argumevt", "lua -e")
+NoRun("syntax error", "lua -e a")
+NoRun("'-l' needs argument", "lua -l")
+
+
+if T then   -- test library?
+  print("testing 'not enough memory' to create a state")
+  NoRun("not enough memory", "env MEMLIMIT=100 lua")
+
+  -- testing 'warn'
+  warn("@store")
+  warn("@123", "456", "789")
+  assert(_WARN == "@123456789"); _WARN = false
+
+  warn("zip", "", " ", "zap")
+  assert(_WARN == "zip zap"); _WARN = false
+  warn("ZIP", "", " ", "ZAP")
+  assert(_WARN == "ZIP ZAP"); _WARN = false
+  warn("@normal")
+end
+
+do
+  -- 'warn' must get at least one argument
+  local st, msg = pcall(warn)
+  assert(string.find(msg, "string expected"))
+
+  -- 'warn' does not leave unfinished warning in case of errors
+  -- (message would appear in next warning)
+  st, msg = pcall(warn, "SHOULD NOT APPEAR", {})
+  assert(string.find(msg, "string expected"))
+end
+
+print('+')
+
+print(ÿtesting Ctrl C')
+do
+  -- interrupt a script
+  local function kill (pid)
+    return os.execute(string.format('kill -INT %s 2> /dev/null', pid))
+  end
+
+  -- function to run a script in background, returning its output file
+  -- descriptor and its pid
+  local function runback (luaprg)
+    -- shell script to run 'luaprg' in background and echo its pid
+    local shellprg = string.format('%s -e "%s" & echo $!', progname, luaprg)
+    local f = io.popen(shellprg, "r")   -- run shell script
+    local pid = f:read()   -- get
